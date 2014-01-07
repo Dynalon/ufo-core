@@ -75,7 +75,9 @@ ufo_output_task_get_output_requisition (UfoOutputTask *task,
 
     g_return_if_fail (UFO_IS_OUTPUT_TASK (task));
     priv = task->priv;
+    g_debug("try pop");
     buffer = g_async_queue_pop (priv->out_queue);
+    g_debug("TRY POP");
     ufo_buffer_get_requisition (buffer, requisition);
     g_async_queue_push (priv->out_queue, buffer);
 }

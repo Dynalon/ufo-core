@@ -338,10 +338,12 @@ handle_get_requisition (UfoDaemon *daemon)
     g_debug("wait for requisition");
     ufo_output_task_get_output_requisition (UFO_OUTPUT_TASK (priv->output_task),
                                             &requisition);
+    g_debug("got requisition");
 
     UfoMessage *msg = ufo_message_new (UFO_MESSAGE_ACK, sizeof (UfoRequisition));
     memcpy (msg->data, &requisition, msg->data_size);
     ufo_messenger_send_blocking (priv->msger, msg, NULL);
+    g_debug("sent requisition to client");
     ufo_message_free (msg);
 }
 
@@ -436,7 +438,7 @@ run_scheduler (UfoDaemon *daemon)
 static gboolean
 handle_incoming (UfoDaemon *daemon, UfoMessage *msg)
 {
-    // g_debug ("handling %s", ufo_message_type_to_char (msg->type));
+    //g_debug ("handling %s", ufo_message_type_to_char (msg->type));
     switch (msg->type) {
         case UFO_MESSAGE_GET_NUM_DEVICES:
             handle_get_num_devices (daemon);
@@ -472,6 +474,7 @@ handle_incoming (UfoDaemon *daemon, UfoMessage *msg)
         default:
             g_message ("Unknown message received\n");
     }
+    //g_debug ("DONE handling %s", ufo_message_type_to_char (msg->type));
     return TRUE;
 }
 

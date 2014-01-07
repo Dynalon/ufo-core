@@ -144,7 +144,7 @@ mpi_init (int *argc, char *argv[], gint *rank, gint *global_size)
     g_debug ("Process PID %d ranked %d of %d  - ready for attach\n",
              getpid(), *rank, *global_size - 1);
 
-    sleep (5);
+    //sleep (5);
 #endif
 
 }
