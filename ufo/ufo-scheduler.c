@@ -45,7 +45,7 @@
 #include <ufo/ufo-buffer-pool.h>
 
 // best result with 10 for zmq ipc:// transport
-#define MAX_REMOTE_IN_FLIGHT 50
+#define MAX_REMOTE_IN_FLIGHT 40
 #define MAX_POOL_LEN 10
 #define POOL_SPARE 10
 static gpointer static_context;
@@ -542,11 +542,13 @@ static void run_remote_task_singlethreaded (TaskLocalData *tld)
         // implicit barrier, wait until all remote node threds have sent their data
         // TODO why is this?
         while (g_atomic_int_get (send_pending) != n_remotes) {
+            g_debug ("yielding");
 		    g_thread_yield ();
         }
 
         g_mutex_lock(send_pending_lock);
         if (send_pending >= n_remotes) {
+            g_debug ("reached the boundary, resetting send_pending to 0");
             g_atomic_int_set (send_pending, 0);
         }
         g_mutex_unlock(send_pending_lock);
@@ -555,18 +557,28 @@ static void run_remote_task_singlethreaded (TaskLocalData *tld)
         // node will have 2 GPUs, and a "branch" is blocking if no new input
         // is supplied??
         while (in_flight > 3) {
+            g_debug ("get requisition");
             ufo_remote_node_get_requisition (remote, &requisition);
+            g_debug ("got  requisition");
+            g_debug ("get buffer");
             output = ufo_buffer_pool_acquire (obp, &requisition);
+            g_debug ("got buffer");
+            g_debug ("get result");
             ufo_remote_node_get_result (remote, output);
+            g_debug ("got result");
             in_flight--;
+            g_debug ("IN flight: %d", in_flight);
             push_to_least_utilized_queue (output, successor_queues);
         }
     }
     // HACK should be 0 but we have a race then
     g_debug ("start to collect outstanding buffers");
     while (in_flight > 2) {
+        g_debug ("GET REQUISITION ");
         //ufo_remote_node_get_requisition (remote, &requisition);
+        g_debug ("ACQUIRING output buffer");
         output = ufo_buffer_pool_acquire (obp, &requisition);
+            g_debug ("GOT output buffer");
         ufo_remote_node_get_result (remote, output);
         in_flight--;
         push_to_least_utilized_queue (output, successor_queues);
