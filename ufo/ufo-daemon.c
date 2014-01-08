@@ -354,15 +354,19 @@ void handle_get_result (UfoDaemon *daemon)
     UfoBuffer *buffer;
     gsize size;
 
+    g_debug("get output buffer");
     buffer = ufo_output_task_get_output_buffer (UFO_OUTPUT_TASK (priv->output_task));
+    g_debug("got output buffer");
     size = ufo_buffer_get_size (buffer);
 
     UfoMessage *response = ufo_message_new (UFO_MESSAGE_ACK, size);
     // memcpy (response->data, ufo_buffer_get_host_array (buffer, NULL), size);
     response->data = ufo_buffer_get_host_array (buffer, NULL);
     response->data_size = size;
+    g_debug("send result");
     ufo_messenger_send_blocking (priv->msger, response, NULL);
     ufo_output_task_release_output_buffer (UFO_OUTPUT_TASK (priv->output_task), buffer);
+    g_debug("done send result and released buffer");
 }
 
 static void
@@ -438,7 +442,7 @@ run_scheduler (UfoDaemon *daemon)
 static gboolean
 handle_incoming (UfoDaemon *daemon, UfoMessage *msg)
 {
-    //g_debug ("handling %s", ufo_message_type_to_char (msg->type));
+    g_debug ("START handling %s", ufo_message_type_to_char (msg->type));
     switch (msg->type) {
         case UFO_MESSAGE_GET_NUM_DEVICES:
             handle_get_num_devices (daemon);
@@ -474,7 +478,7 @@ handle_incoming (UfoDaemon *daemon, UfoMessage *msg)
         default:
             g_message ("Unknown message received\n");
     }
-    //g_debug ("DONE handling %s", ufo_message_type_to_char (msg->type));
+    g_debug ("DONE handling %s", ufo_message_type_to_char (msg->type));
     return TRUE;
 }
 
