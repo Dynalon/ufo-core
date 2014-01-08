@@ -45,8 +45,8 @@
 #include <ufo/ufo-buffer-pool.h>
 
 // best result with 10 for zmq ipc:// transport
-#define MAX_REMOTE_IN_FLIGHT 100
-#define MAX_POOL_LEN 20
+#define MAX_REMOTE_IN_FLIGHT 50
+#define MAX_POOL_LEN 10
 #define POOL_SPARE 10
 static gpointer static_context;
 static volatile gint *send_pending;
@@ -453,10 +453,7 @@ static void recv_data_from_remote (TaskLocalData *tld)
         // g_thread_yield ();
         while (g_atomic_int_get (tld->in_flight) > 0 && g_atomic_int_get (tld->in_flight) != G_MAXINT) {
 
-            // We assume a requisition of a remote node does not change, so we can
-            // save multiple network calls by only asking once for the requisition
-            // if (requisition.n_dims == G_MAXINT)
-                ufo_remote_node_get_requisition (remote, &requisition);
+            ufo_remote_node_get_requisition (remote, &requisition);
 
             output = ufo_buffer_pool_acquire (obp, &requisition);
             printf (".");
@@ -519,6 +516,7 @@ static void run_remote_task_singlethreaded (TaskLocalData *tld)
     gint in_flight = 0;
 
     while (active) {
+        g_debug("in flight: %d ", in_flight);
         while (in_flight < max_in_flight) {
             gpointer next_input = g_async_queue_pop (ufo_task_node_get_input_queue (self));
             if ((int *)next_input == UFO_END_OF_STREAM) {
@@ -530,28 +528,34 @@ static void run_remote_task_singlethreaded (TaskLocalData *tld)
             ufo_remote_node_send_inputs (remote, &input);
             ufo_buffer_release_to_pool (input);
             in_flight++;
+
         }
-        // We assume a requisition of a remote node does not change, so we can
-        // save multiple network calls by only asking once for the requisition
-        if (requisition.n_dims == G_MAXINT)
-            ufo_remote_node_get_requisition (remote, &requisition);
 
         g_debug("adding one to send_pening which was  %d", g_atomic_int_get(send_pending));
         g_atomic_int_add (send_pending, 1);
 
-        if (!active) break;
+        if (!active) {
+            g_debug ("breaking!");
+            break;
+        }
 
-        // implicit barrier
+        // implicit barrier, wait until all remote node threds have sent their data
+        // TODO why is this?
         while (g_atomic_int_get (send_pending) != n_remotes) {
-		g_thread_yield ();
+		    g_thread_yield ();
         }
 
         g_mutex_lock(send_pending_lock);
-        if (send_pending >= n_remotes)
+        if (send_pending >= n_remotes) {
             g_atomic_int_set (send_pending, 0);
+        }
         g_mutex_unlock(send_pending_lock);
 
-        while (in_flight > 0) {
+        // this is a nasty bug that arises from the "hybrid approach" - theremote
+        // node will have 2 GPUs, and a "branch" is blocking if no new input
+        // is supplied??
+        while (in_flight > 3) {
+            ufo_remote_node_get_requisition (remote, &requisition);
             output = ufo_buffer_pool_acquire (obp, &requisition);
             ufo_remote_node_get_result (remote, output);
             in_flight--;
@@ -559,7 +563,9 @@ static void run_remote_task_singlethreaded (TaskLocalData *tld)
         }
     }
     // HACK should be 0 but we have a race then
+    g_debug ("start to collect outstanding buffers");
     while (in_flight > 2) {
+        //ufo_remote_node_get_requisition (remote, &requisition);
         output = ufo_buffer_pool_acquire (obp, &requisition);
         ufo_remote_node_get_result (remote, output);
         in_flight--;
@@ -1329,7 +1335,7 @@ ufo_scheduler_run (UfoScheduler *scheduler,
         // threads[i] = g_thread_create ((GThreadFunc) run_task_simple, tlds[i], TRUE, error);
         if (has_remote_nodes)
             threads[i] = g_thread_create ((GThreadFunc) run_task_simple, tlds[i], TRUE, error);
-      
+
         else
             threads[i] = g_thread_create ((GThreadFunc) run_task, tlds[i], TRUE, error);
 
