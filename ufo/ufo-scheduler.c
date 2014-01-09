@@ -45,7 +45,7 @@
 #include <ufo/ufo-buffer-pool.h>
 
 // best result with 10 for zmq ipc:// transport
-#define MAX_REMOTE_IN_FLIGHT 40
+#define MAX_REMOTE_IN_FLIGHT 4
 #define MAX_POOL_LEN 10
 #define POOL_SPARE 10
 static gpointer static_context;
@@ -528,7 +528,7 @@ static void run_remote_task_singlethreaded (TaskLocalData *tld)
             ufo_remote_node_send_inputs (remote, &input);
             ufo_buffer_release_to_pool (input);
             in_flight++;
-
+            g_debug ("in_flight: %d", in_flight);
         }
 
         g_debug("adding one to send_pening which was  %d", g_atomic_int_get(send_pending));
@@ -539,8 +539,9 @@ static void run_remote_task_singlethreaded (TaskLocalData *tld)
             break;
         }
 
-        // implicit barrier, wait until all remote node threds have sent their data
-        // TODO why is this?
+        // implicit sprint barrier, wait until all remote node threads have sent their data
+        // as i.e. the MPI messenger uses a global lock for send/recv, we don't want
+        // outstanding sends to interfere with recevies
         while (g_atomic_int_get (send_pending) != n_remotes) {
             g_debug ("yielding");
 		    g_thread_yield ();
@@ -556,9 +557,9 @@ static void run_remote_task_singlethreaded (TaskLocalData *tld)
         // this is a nasty bug that arises from the "hybrid approach" - theremote
         // node will have 2 GPUs, and a "branch" is blocking if no new input
         // is supplied??
-        while (in_flight > 3) {
+        ufo_remote_node_get_requisition (remote, &requisition);
+        while (in_flight > 4) {
             g_debug ("get requisition");
-            ufo_remote_node_get_requisition (remote, &requisition);
             g_debug ("got  requisition");
             g_debug ("get buffer");
             output = ufo_buffer_pool_acquire (obp, &requisition);
@@ -573,7 +574,7 @@ static void run_remote_task_singlethreaded (TaskLocalData *tld)
     }
     // HACK should be 0 but we have a race then
     g_debug ("start to collect outstanding buffers");
-    while (in_flight > 2) {
+    while (in_flight > 4) {
         g_debug ("GET REQUISITION ");
         //ufo_remote_node_get_requisition (remote, &requisition);
         g_debug ("ACQUIRING output buffer");

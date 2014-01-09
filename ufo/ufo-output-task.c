@@ -46,9 +46,7 @@ static void ufo_cpu_task_interface_init (UfoCpuTaskIface *iface);
 
 G_DEFINE_TYPE_WITH_CODE (UfoOutputTask, ufo_output_task, UFO_TYPE_TASK_NODE,
                          G_IMPLEMENT_INTERFACE (UFO_TYPE_TASK,
-                                                ufo_task_interface_init)
-                         G_IMPLEMENT_INTERFACE (UFO_TYPE_CPU_TASK,
-                                                ufo_cpu_task_interface_init))
+                                                ufo_task_interface_init) G_IMPLEMENT_INTERFACE (UFO_TYPE_CPU_TASK, ufo_cpu_task_interface_init))
 
 #define UFO_OUTPUT_TASK_GET_PRIVATE(obj) (G_TYPE_INSTANCE_GET_PRIVATE((obj), UFO_TYPE_OUTPUT_TASK, UfoOutputTaskPrivate))
 
@@ -66,18 +64,18 @@ ufo_output_task_new (guint n_dims)
     return UFO_NODE (task);
 }
 
+UfoRequisition *requ = NULL;
+
 void
 ufo_output_task_get_output_requisition (UfoOutputTask *task,
                                         UfoRequisition *requisition)
 {
     UfoBuffer *buffer;
     UfoOutputTaskPrivate *priv;
-
     g_return_if_fail (UFO_IS_OUTPUT_TASK (task));
+
     priv = task->priv;
-    g_debug("try pop");
     buffer = g_async_queue_pop (priv->out_queue);
-    g_debug("TRY POP");
     ufo_buffer_get_requisition (buffer, requisition);
     g_async_queue_push (priv->out_queue, buffer);
 }
@@ -159,6 +157,9 @@ ufo_output_task_process (UfoCpuTask *task,
 
     copy = g_async_queue_pop (priv->in_queue);
     ufo_buffer_copy (outputs[0], copy);
+
+    // HACK we push back the input
+    g_async_queue_push (priv->in_queue, copy);
     g_async_queue_push (priv->out_queue, copy);
     return TRUE;
 }

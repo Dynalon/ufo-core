@@ -319,6 +319,7 @@ handle_send_inputs (UfoDaemon *daemon, UfoMessage *request)
     ufo_message_free (response);
 }
 
+UfoRequisition *req = NULL;
 static void
 handle_get_requisition (UfoDaemon *daemon)
 {
@@ -335,10 +336,16 @@ handle_get_requisition (UfoDaemon *daemon)
         return;
     }
     /* We need to get the requisition from the last node */
-    g_debug("wait for requisition");
-    ufo_output_task_get_output_requisition (UFO_OUTPUT_TASK (priv->output_task),
-                                            &requisition);
-    g_debug("got requisition");
+    if (req == NULL) {
+        req = g_new0 (UfoRequisition, 1);
+        g_debug("wait for requisition");
+        ufo_output_task_get_output_requisition (UFO_OUTPUT_TASK (priv->output_task),
+                                                &requisition);
+        req = memcpy (req, &requisition, sizeof (UfoRequisition));
+        g_debug("got requisition");
+    } else {
+        requisition = *req;
+    }
 
     UfoMessage *msg = ufo_message_new (UFO_MESSAGE_ACK, sizeof (UfoRequisition));
     memcpy (msg->data, &requisition, msg->data_size);
