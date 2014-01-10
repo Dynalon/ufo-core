@@ -250,7 +250,6 @@ handle_stream_json (UfoDaemon *daemon, UfoMessage *msg)
 
     priv->scheduler_thread = g_thread_create ((GThreadFunc) run_scheduler, daemon, TRUE, NULL);
     g_free (json);
-    g_debug("end of handle stream json");
 }
 
 static void
@@ -338,11 +337,9 @@ handle_get_requisition (UfoDaemon *daemon)
     /* We need to get the requisition from the last node */
     if (req == NULL) {
         req = g_new0 (UfoRequisition, 1);
-        g_debug("wait for requisition");
         ufo_output_task_get_output_requisition (UFO_OUTPUT_TASK (priv->output_task),
                                                 &requisition);
         req = memcpy (req, &requisition, sizeof (UfoRequisition));
-        g_debug("got requisition");
     } else {
         requisition = *req;
     }
@@ -350,7 +347,6 @@ handle_get_requisition (UfoDaemon *daemon)
     UfoMessage *msg = ufo_message_new (UFO_MESSAGE_ACK, sizeof (UfoRequisition));
     memcpy (msg->data, &requisition, msg->data_size);
     ufo_messenger_send_blocking (priv->msger, msg, NULL);
-    g_debug("sent requisition to client");
     ufo_message_free (msg);
 }
 
@@ -361,19 +357,15 @@ void handle_get_result (UfoDaemon *daemon)
     UfoBuffer *buffer;
     gsize size;
 
-    g_debug("get output buffer");
     buffer = ufo_output_task_get_output_buffer (UFO_OUTPUT_TASK (priv->output_task));
-    g_debug("got output buffer");
     size = ufo_buffer_get_size (buffer);
 
     UfoMessage *response = ufo_message_new (UFO_MESSAGE_ACK, size);
-    // memcpy (response->data, ufo_buffer_get_host_array (buffer, NULL), size);
-    response->data = ufo_buffer_get_host_array (buffer, NULL);
+    memcpy (response->data, ufo_buffer_get_host_array (buffer, NULL), size);
+    //response->data = ufo_buffer_get_host_array (buffer, NULL);
     response->data_size = size;
-    g_debug("send result");
     ufo_messenger_send_blocking (priv->msger, response, NULL);
     ufo_output_task_release_output_buffer (UFO_OUTPUT_TASK (priv->output_task), buffer);
-    g_debug("done send result and released buffer");
 }
 
 static void
@@ -485,7 +477,7 @@ handle_incoming (UfoDaemon *daemon, UfoMessage *msg)
         default:
             g_message ("Unknown message received\n");
     }
-    g_debug ("DONE handling %s", ufo_message_type_to_char (msg->type));
+    // g_debug ("DONE handling %s", ufo_message_type_to_char (msg->type));
     return TRUE;
 }
 

@@ -45,7 +45,7 @@
 #include <ufo/ufo-buffer-pool.h>
 
 // best result with 10 for zmq ipc:// transport
-#define MAX_REMOTE_IN_FLIGHT 4
+#define MAX_REMOTE_IN_FLIGHT 40
 #define MAX_POOL_LEN 10
 #define POOL_SPARE 10
 static gpointer static_context;
@@ -336,11 +336,11 @@ run_remote_task (TaskLocalData *tld)
             if (!alive[i])
                 continue;
 
-            ufo_remote_node_get_requisition (remote, &requisition);
             if (requisition.n_dims > 0) {
                 group = ufo_task_node_get_out_group (UFO_TASK_NODE (tld->task));
                 trace (g_strdup_printf ("RemoteTask START waiting for an output buffer"), tld);
                 output = ufo_group_pop_output_buffer (group, &requisition);
+                ufo_remote_node_get_requisition (remote, &requisition);
                 trace (g_strdup_printf ("RemoteTask STOP waiting for an output buffer"), tld);
                 trace (g_strdup_printf ("RemoteTask START waiting for result from remote node"), tld);
                 ufo_remote_node_get_result (remote, output);
@@ -557,29 +557,19 @@ static void run_remote_task_singlethreaded (TaskLocalData *tld)
         // this is a nasty bug that arises from the "hybrid approach" - theremote
         // node will have 2 GPUs, and a "branch" is blocking if no new input
         // is supplied??
-        ufo_remote_node_get_requisition (remote, &requisition);
-        while (in_flight > 4) {
-            g_debug ("get requisition");
-            g_debug ("got  requisition");
-            g_debug ("get buffer");
+        while (in_flight > 0) {
+            ufo_remote_node_get_requisition (remote, &requisition);
             output = ufo_buffer_pool_acquire (obp, &requisition);
-            g_debug ("got buffer");
-            g_debug ("get result");
             ufo_remote_node_get_result (remote, output);
-            g_debug ("got result");
             in_flight--;
-            g_debug ("IN flight: %d", in_flight);
             push_to_least_utilized_queue (output, successor_queues);
         }
     }
     // HACK should be 0 but we have a race then
     g_debug ("start to collect outstanding buffers");
-    while (in_flight > 4) {
-        g_debug ("GET REQUISITION ");
+    while (in_flight > 0) {
         //ufo_remote_node_get_requisition (remote, &requisition);
-        g_debug ("ACQUIRING output buffer");
         output = ufo_buffer_pool_acquire (obp, &requisition);
-            g_debug ("GOT output buffer");
         ufo_remote_node_get_result (remote, output);
         in_flight--;
         push_to_least_utilized_queue (output, successor_queues);
@@ -656,7 +646,7 @@ run_task_simple (TaskLocalData *tld)
 
     if (UFO_IS_REMOTE_TASK (tld->task)) {
         run_remote_task_singlethreaded (tld);
-        //run_remote_task_multithreaded (tld);
+        // run_remote_task_multithreaded (tld);
         return NULL;
     }
 
@@ -839,7 +829,6 @@ run_task (TaskLocalData *tld)
             ufo_group_push_output_buffer (group, output);
             trace (g_strdup ("end pushing output buffer"), tld);
         }
-
         /* Release buffers for further consumption */
         if (active)
             release_inputs (tld, inputs);
