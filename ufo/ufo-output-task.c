@@ -157,9 +157,6 @@ ufo_output_task_process (UfoCpuTask *task,
 
     copy = g_async_queue_pop (priv->in_queue);
     ufo_buffer_copy (outputs[0], copy);
-
-    // HACK we push back the input
-    g_async_queue_push (priv->in_queue, copy);
     g_async_queue_push (priv->out_queue, copy);
     return TRUE;
 }
