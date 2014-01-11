@@ -335,7 +335,7 @@ handle_get_requisition (UfoDaemon *daemon)
         return;
     }
     /* We need to get the requisition from the last node */
-    if (req == NULL) {
+    if (req == NULL || TRUE) {
         req = g_new0 (UfoRequisition, 1);
         ufo_output_task_get_output_requisition (UFO_OUTPUT_TASK (priv->output_task),
                                                 &requisition);
@@ -441,7 +441,7 @@ run_scheduler (UfoDaemon *daemon)
 static gboolean
 handle_incoming (UfoDaemon *daemon, UfoMessage *msg)
 {
-    g_debug ("START handling %s", ufo_message_type_to_char (msg->type));
+    g_debug ("handling %s", ufo_message_type_to_char (msg->type));
     switch (msg->type) {
         case UFO_MESSAGE_GET_NUM_DEVICES:
             handle_get_num_devices (daemon);

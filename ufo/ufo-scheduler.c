@@ -45,7 +45,7 @@
 #include <ufo/ufo-buffer-pool.h>
 
 // best result with 10 for zmq ipc:// transport
-#define MAX_REMOTE_IN_FLIGHT 40
+#define MAX_REMOTE_IN_FLIGHT 10
 #define MAX_POOL_LEN 10
 #define POOL_SPARE 10
 static gpointer static_context;
@@ -516,7 +516,6 @@ static void run_remote_task_singlethreaded (TaskLocalData *tld)
     gint in_flight = 0;
 
     while (active) {
-        g_debug("in flight: %d ", in_flight);
         while (in_flight < max_in_flight) {
             gpointer next_input = g_async_queue_pop (ufo_task_node_get_input_queue (self));
             if ((int *)next_input == UFO_END_OF_STREAM) {
@@ -528,22 +527,18 @@ static void run_remote_task_singlethreaded (TaskLocalData *tld)
             ufo_remote_node_send_inputs (remote, &input);
             ufo_buffer_release_to_pool (input);
             in_flight++;
-            g_debug ("in_flight: %d", in_flight);
         }
 
         g_debug("adding one to send_pening which was  %d", g_atomic_int_get(send_pending));
         g_atomic_int_add (send_pending, 1);
 
-        if (!active) {
-            g_debug ("breaking!");
+        if (!active)
             break;
-        }
 
         // implicit sprint barrier, wait until all remote node threads have sent their data
         // as i.e. the MPI messenger uses a global lock for send/recv, we don't want
         // outstanding sends to interfere with recevies
         while (g_atomic_int_get (send_pending) != n_remotes) {
-            g_debug ("yielding");
 		    g_thread_yield ();
         }
 
