@@ -529,7 +529,6 @@ static void run_remote_task_singlethreaded (TaskLocalData *tld)
             in_flight++;
         }
 
-        g_debug("adding one to send_pening which was  %d", g_atomic_int_get(send_pending));
         g_atomic_int_add (send_pending, 1);
 
         if (!active)
@@ -544,7 +543,6 @@ static void run_remote_task_singlethreaded (TaskLocalData *tld)
 
         g_mutex_lock(send_pending_lock);
         if (send_pending >= n_remotes) {
-            g_debug ("reached the boundary, resetting send_pending to 0");
             g_atomic_int_set (send_pending, 0);
         }
         g_mutex_unlock(send_pending_lock);
@@ -563,7 +561,7 @@ static void run_remote_task_singlethreaded (TaskLocalData *tld)
     // HACK should be 0 but we have a race then
     g_debug ("start to collect outstanding buffers");
     while (in_flight > 0) {
-        //ufo_remote_node_get_requisition (remote, &requisition);
+        ufo_remote_node_get_requisition (remote, &requisition);
         output = ufo_buffer_pool_acquire (obp, &requisition);
         ufo_remote_node_get_result (remote, output);
         in_flight--;
