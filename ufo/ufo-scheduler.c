@@ -45,9 +45,9 @@
 #include <ufo/ufo-buffer-pool.h>
 
 // best result with 10 for zmq ipc:// transport
-#define MAX_REMOTE_IN_FLIGHT 10
-#define MAX_POOL_LEN 10
-#define POOL_SPARE 10
+#define MAX_REMOTE_IN_FLIGHT 100
+#define MAX_POOL_LEN 20
+#define POOL_SPARE 20
 static gpointer static_context;
 static volatile gint *send_pending;
 static GMutex *send_pending_lock;
@@ -511,9 +511,10 @@ static void run_remote_task_singlethreaded (TaskLocalData *tld)
     n_remote_gpus = ufo_remote_node_get_num_gpus (remote);
 
     gint max_in_flight = n_remote_gpus * MAX_REMOTE_IN_FLIGHT;
-    UfoBufferPool *obp = ufo_buffer_pool_new (max_in_flight + 10, static_context);
+    UfoBufferPool *obp = ufo_buffer_pool_new (max_in_flight + POOL_SPARE, static_context);
 
     gint in_flight = 0;
+    gboolean got_requisition = FALSE;
 
     while (active) {
         while (in_flight < max_in_flight) {
@@ -529,15 +530,19 @@ static void run_remote_task_singlethreaded (TaskLocalData *tld)
             in_flight++;
         }
 
-        g_atomic_int_add (send_pending, 1);
+        //g_atomic_int_add (send_pending, 1);
 
         if (!active)
             break;
 
+            if (G_UNLIKELY (!got_requisition)) {
+        	ufo_remote_node_get_requisition (remote, &requisition);
+                got_requisition = TRUE;
+            }
         // implicit sprint barrier, wait until all remote node threads have sent their data
         // as i.e. the MPI messenger uses a global lock for send/recv, we don't want
         // outstanding sends to interfere with recevies
-        while (g_atomic_int_get (send_pending) != n_remotes) {
+        /*while (g_atomic_int_get (send_pending) != n_remotes) {
 		    g_thread_yield ();
         }
 
@@ -545,13 +550,12 @@ static void run_remote_task_singlethreaded (TaskLocalData *tld)
         if (send_pending >= n_remotes) {
             g_atomic_int_set (send_pending, 0);
         }
-        g_mutex_unlock(send_pending_lock);
+        g_mutex_unlock(send_pending_lock); */
 
         // this is a nasty bug that arises from the "hybrid approach" - theremote
         // node will have 2 GPUs, and a "branch" is blocking if no new input
         // is supplied??
         while (in_flight > 0) {
-            ufo_remote_node_get_requisition (remote, &requisition);
             output = ufo_buffer_pool_acquire (obp, &requisition);
             ufo_remote_node_get_result (remote, output);
             in_flight--;
@@ -561,7 +565,7 @@ static void run_remote_task_singlethreaded (TaskLocalData *tld)
     // HACK should be 0 but we have a race then
     g_debug ("start to collect outstanding buffers");
     while (in_flight > 0) {
-        ufo_remote_node_get_requisition (remote, &requisition);
+        //ufo_remote_node_get_requisition (remote, &requisition);
         output = ufo_buffer_pool_acquire (obp, &requisition);
         ufo_remote_node_get_result (remote, output);
         in_flight--;
@@ -639,7 +643,7 @@ run_task_simple (TaskLocalData *tld)
 
     if (UFO_IS_REMOTE_TASK (tld->task)) {
         run_remote_task_singlethreaded (tld);
-        // run_remote_task_multithreaded (tld);
+        //run_remote_task_multithreaded (tld);
         return NULL;
     }
 
