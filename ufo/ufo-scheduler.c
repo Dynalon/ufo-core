@@ -326,6 +326,19 @@ is_correctly_implemented (UfoTaskNode *node,
     }
 }
 
+static gboolean
+is_remote_node (UfoNode *node, gpointer user_data)
+{
+    return UFO_IS_REMOTE_TASK (node);
+}
+
+static gboolean
+is_gpu_node (UfoNode *node, gpointer user_data)
+{
+    return UFO_IS_GPU_TASK (node);
+}
+
+
 static gpointer
 run_task (TaskLocalData *tld)
 {
@@ -750,6 +763,19 @@ ufo_scheduler_run (UfoScheduler *scheduler,
         ufo_task_graph_expand (task_graph, arch_graph, expand_remote);
     }
 
+    gboolean disable_gpu;
+    g_object_get (G_OBJECT (priv->config), "disable-gpu", &disable_gpu, NULL);
+
+    // remove any GPU pathes in the task graph
+    if (disable_gpu == TRUE) {
+        gint num_remotes = g_list_length (ufo_graph_get_nodes_filtered (UFO_GRAPH(task_graph), is_remote_node, NULL));
+        if (num_remotes > 0) {
+            GList *gpu_tasks = ufo_graph_get_nodes_filtered (UFO_GRAPH (task_graph), is_gpu_node, NULL);
+            for (GList *it = g_list_first (gpu_tasks); it != NULL; it = g_list_next (it))
+                ufo_graph_remove_node (UFO_GRAPH (task_graph), it->data);
+        }
+    }
+
     propagate_partition (task_graph);
     ufo_task_graph_map (task_graph, arch_graph);
 
@@ -796,6 +822,9 @@ ufo_scheduler_run (UfoScheduler *scheduler,
 #endif
 
     g_message ("Processing finished after %3.5fs", g_timer_elapsed (timer, NULL));
+    g_message ("Processing finished after %3.5fs", g_timer_elapsed (timer, NULL));
+    
+	g_message ("Processing finished after %3.5fs", g_timer_elapsed (timer, NULL));
     g_timer_destroy (timer);
 
     /* Cleanup */

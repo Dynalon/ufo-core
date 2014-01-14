@@ -43,12 +43,14 @@ enum {
     PROP_0,
     PROP_PATHS,
     PROP_DEVICE_TYPE,
+    PROP_DISABLE_GPU,
     N_PROPERTIES
 };
 
 struct _UfoConfigPrivate {
     GValueArray     *path_array;
     UfoDeviceType    device_type;
+    gboolean         disable_gpu;
 };
 
 static GParamSpec *properties[N_PROPERTIES] = { NULL, };
@@ -158,6 +160,10 @@ ufo_config_set_property (GObject      *object,
             priv->device_type = g_value_get_flags (value);
             break;
 
+        case PROP_DISABLE_GPU:
+            priv->disable_gpu = g_value_get_boolean (value);
+            break;
+
         default:
             G_OBJECT_WARN_INVALID_PROPERTY_ID (object, property_id, pspec);
             break;
@@ -179,6 +185,10 @@ ufo_config_get_property (GObject      *object,
 
         case PROP_DEVICE_TYPE:
             g_value_set_flags (value, priv->device_type);
+            break;
+
+        case PROP_DISABLE_GPU:
+            g_value_set_boolean (value, priv->disable_gpu);
             break;
 
         default:
@@ -246,8 +256,23 @@ ufo_config_class_init (UfoConfigClass *klass)
                             UFO_DEVICE_ALL,
                             G_PARAM_READWRITE);
 
+    /**
+     * UfoConfig:disable-gpu
+     *
+     * Let the user select whether the main machine is used for gpu computing.
+     *
+     */
+    properties[PROP_DISABLE_GPU] =
+        g_param_spec_boolean ("disable-gpu",
+                              "Don't use local machine for GPU computing",
+                              "Don't use local machine for GPU computing",
+                              FALSE,
+                              G_PARAM_READWRITE);
+
     g_object_class_install_property (oclass, PROP_PATHS,
                                      properties[PROP_PATHS]);
+    g_object_class_install_property (oclass, PROP_DISABLE_GPU,
+                                     properties[PROP_DISABLE_GPU]);
     g_object_class_install_property (oclass, PROP_DEVICE_TYPE,
                                      properties[PROP_DEVICE_TYPE]);
 

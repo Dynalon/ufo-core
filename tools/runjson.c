@@ -169,6 +169,7 @@ int main(int argc, char *argv[])
     gchar **paths = NULL;
     gchar **addresses = NULL;
     gboolean show_version = FALSE;
+    gboolean disable_gpu = FALSE;
     UfoConfig *config = NULL;
 
     GOptionEntry entries[] = {
@@ -178,6 +179,8 @@ int main(int argc, char *argv[])
         { "address", 'a', 0, G_OPTION_ARG_STRING_ARRAY, &addresses,
           "Address of remote server running `ufod'", NULL },
 #endif
+        { "disable-gpu", 'n', 0, G_OPTION_ARG_NONE, &disable_gpu,
+          "Don't use local system for GPU computations", NULL },
         { "version", 'v', 0, G_OPTION_ARG_NONE, &show_version,
           "Show version information", NULL },
         { NULL }
@@ -212,14 +215,17 @@ int main(int argc, char *argv[])
     }
 
     config = get_config (paths);
+    g_object_set (G_OBJECT (config), "disable-gpu", disable_gpu, NULL);
 
 #ifdef MPI
     gint rank, size;
     mpi_init (&argc, argv, &rank, &size);
 
     if (rank == 0) {
+    	g_object_set (G_OBJECT (config), "disable-gpu", TRUE, NULL);
         addresses = mpi_build_addresses (size);
     } else {
+    	g_object_set (G_OBJECT (config), "disable-gpu", FALSE, NULL);
         gchar *addr = g_strdup_printf("%d", rank);
         UfoDaemon *daemon = ufo_daemon_new (config, addr);
         ufo_daemon_start (daemon);

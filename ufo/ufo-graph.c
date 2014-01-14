@@ -729,6 +729,33 @@ ufo_graph_get_paths (UfoGraph *graph,
 }
 
 /**
+ * ufo_graph_remove_node:
+ * @graph: A #UfoGraph
+ * @node: The node to remove from the graph.
+ *
+ * Remove @node from the @graph with all in and out edges.
+ */
+void
+ufo_graph_remove_node (UfoGraph *graph,
+                       UfoNode *node)
+{
+
+    UfoGraphPrivate *priv;
+    priv = graph->priv;
+
+    GList *in_edges = get_source_edges (priv->edges, node);
+    for (GList *it = g_list_first (in_edges); it != NULL; it = g_list_next (it))
+        priv->edges = g_list_remove (priv->edges, it->data);
+
+    GList *out_edges = get_target_edges (priv->edges, node);
+    for (GList *it = g_list_first (out_edges); it != NULL; it = g_list_next (it))
+        priv->edges = g_list_remove (priv->edges, it->data);
+
+    priv->nodes = g_list_remove (priv->nodes, node);
+
+}
+
+/**
  * ufo_graph_dump_dot:
  * @graph: A #UfoGraph
  * @filename: A string containing a filename
