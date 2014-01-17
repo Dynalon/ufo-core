@@ -279,10 +279,14 @@ ufo_messenger_send_blocking (UfoMessenger *msger,
                              GError **error)
 {
     GMutex *mutex = g_static_mutex_get_mutex (&static_mutex);
+    NetworkEvent *ev = start_trace_event (msger, NULL, "SEND_LOCKACQUIRE");
     g_mutex_lock (mutex);
-    NetworkEvent *ev = start_trace_event (msger, request, NULL);
+    stop_trace_event (msger, NULL, ev);
+
+    ev = start_trace_event (msger, request, NULL);
     UfoMessage *msg = UFO_MESSENGER_GET_IFACE (msger)->send_blocking (msger, request, error);
     stop_trace_event (msger, msg, ev);
+
     g_mutex_unlock (mutex);
     return msg;
 }
@@ -303,10 +307,13 @@ ufo_messenger_recv_blocking (UfoMessenger *msger,
                             GError **error)
 {
     GMutex *mutex = g_static_mutex_get_mutex (&static_mutex);
+    NetworkEvent *ev = start_trace_event (msger, NULL, "RECV_LOCKACQUIRE");
     g_mutex_lock (mutex);
-    //NetworkEvent *ev = start_trace_event (msger, NULL);
+    stop_trace_event (msger, NULL, ev);
+
+    ev = start_trace_event (msger, NULL, NULL);
     UfoMessage *msg = UFO_MESSENGER_GET_IFACE (msger)->recv_blocking (msger, error);
-    //stop_trace_event (msger, msg, ev);
+    stop_trace_event (msger, msg, ev);
     g_mutex_unlock (mutex);
     return msg;
 }

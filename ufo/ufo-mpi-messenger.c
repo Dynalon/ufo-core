@@ -129,9 +129,7 @@ ufo_mpi_messenger_send_blocking (UfoMessenger *msger,
 {
     UfoMpiMessengerPrivate *priv = UFO_MPI_MESSENGER_GET_PRIVATE (msger);
 
-    NetworkEvent *ev = start_trace_event (msger, NULL, "SEND_LOCKACQUIRE");
     g_mutex_lock (priv->mutex);
-    stop_trace_event (msger, NULL, ev);
     g_assert (priv->connected == TRUE);
 
     // we send in two phaess: first send the data frame of fixed size
@@ -141,7 +139,7 @@ ufo_mpi_messenger_send_blocking (UfoMessenger *msger,
     request_frame->data_size = request_msg->data_size;
 
     // send preflight
-    ev = start_trace_event (msger, NULL, "MPI_SEND_PREFLIGHT");
+    NetworkEvent *ev = start_trace_event (msger, NULL, "MPI_SEND_PREFLIGHT");
     MPI_Ssend (request_frame, sizeof (DataFrame), MPI_CHAR, priv->remote_rank, 0, MPI_COMM_WORLD);
     stop_trace_event (msger, NULL, ev);
 
@@ -201,9 +199,7 @@ ufo_mpi_messenger_recv_blocking (UfoMessenger *msger,
 {
     UfoMpiMessengerPrivate *priv = UFO_MPI_MESSENGER_GET_PRIVATE (msger);
 
-    NetworkEvent *ev = start_trace_event (msger, NULL, "RECV_LOCKACQUIRE");
     g_mutex_lock (priv->mutex);
-    stop_trace_event (msger, NULL, ev);
     g_assert (priv->connected == TRUE);
 
     UfoMessage *response = g_malloc0 (sizeof (UfoMessage));
@@ -214,7 +210,7 @@ ufo_mpi_messenger_recv_blocking (UfoMessenger *msger,
     MPI_Status status;
 
     // g_debug ("[%d:%d] RECV waiting for preflight from %d", priv->pid, priv->own_rank, priv->remote_rank);
-    ev = start_trace_event (msger, NULL, "MPI_RECV_PREFLIGHT_RECV");
+    NetworkEvent *ev = start_trace_event (msger, NULL, "MPI_RECV_PREFLIGHT_RECV");
     int ret = MPI_Recv (frame, sizeof (DataFrame), MPI_CHAR, priv->remote_rank, 0, MPI_COMM_WORLD, &status);
     stop_trace_event (msger, NULL, ev);
 
