@@ -219,8 +219,9 @@ ufo_buffer_new (UfoRequisition *requisition,
     UfoBuffer *buffer;
     UfoBufferPrivate *priv;
 
-    if (requisition->n_dims > UFO_BUFFER_MAX_NDIMS || requisition->n_dims == 0)
-        G_BREAKPOINT();
+    if (requisition->n_dims > UFO_BUFFER_MAX_NDIMS || requisition->n_dims == 0) {
+        g_critical ("ufo_buffer_new failed: Wrong dimensions");
+    }
 
     g_return_val_if_fail ((requisition->n_dims <= UFO_BUFFER_MAX_NDIMS) &&
                           (requisition->n_dims > 0), NULL);

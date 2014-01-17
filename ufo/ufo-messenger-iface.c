@@ -82,15 +82,7 @@ typedef struct {
     GList *events;
 } NetworkProfiler;
 
-typedef struct {
-    gdouble timestamp_start;
-    gdouble timestamp_end;
-    gdouble duration;
-    gsize size_req;
-    gsize size_resp;
-    UfoMessageType type;
-    gchar   *role;
-} NetworkEvent;
+
 
 static gchar *
 get_ip_and_port (gchar *str)
@@ -116,7 +108,7 @@ init_profiler (UfoMessenger *msger, gchar *addr)
     return p;
 }
 
-static NetworkEvent * start_trace_event (UfoMessenger *msger, UfoMessage *msg)
+NetworkEvent * start_trace_event (UfoMessenger *msger, UfoMessage *msg, const gchar *topic)
 {
     NetworkProfiler *data = (NetworkProfiler *) ufo_messenger_get_profiler (msger);
     if (data == NULL)
@@ -125,22 +117,20 @@ static NetworkEvent * start_trace_event (UfoMessenger *msger, UfoMessage *msg)
     NetworkEvent *ev = g_malloc0 (sizeof (NetworkEvent));
     ev->size_req = 0; ev->size_resp = 0;
     ev->timestamp_start = g_timer_elapsed (global_clock, NULL);
+    ev->role = g_strdup ("MSG");
+    ev->type = -1;
 
-    if (msg == NULL) {
-        g_free(ev);
-	return NULL;
-        //ev->role = g_strdup ("RECV");
+    if (topic != NULL) {
+        ev->role = g_strdup (topic);
     }
-    else {
+    if (msg != NULL) {
         ev->size_req = msg->data_size;
-        ev->role = g_strdup ("SEND");
         ev->type = msg->type;
     }
-
     return ev;
 }
 
-static void
+void
 stop_trace_event (UfoMessenger *msger, UfoMessage *msg, NetworkEvent *ev)
 {
     if (ev == NULL) return;
@@ -148,17 +138,15 @@ stop_trace_event (UfoMessenger *msger, UfoMessage *msg, NetworkEvent *ev)
     if (p == NULL) return;
 
     ev->timestamp_end = g_timer_elapsed (global_clock, NULL);
+    ev->size_resp = 0;
+    ev->type = UFO_MESSAGE_ACK;
 
     if (msg != NULL) {
-        if (msg->type != UFO_MESSAGE_ACK)
-            ev->type = msg->type;
-
+        ev->type = msg->type;
         ev->size_resp = msg->data_size;
-    } else {
-        ev->size_resp = 0;
     }
 
-    // g_debug ("%.4f %.4f %s", ev->timestamp_start, ev->timestamp_end, ufo_message_type_to_char (ev->type));
+    //g_debug ("%.4f %.4f %s", ev->timestamp_start, ev->timestamp_end, ufo_message_type_to_char (ev->type));
 
     p->events = g_list_append (p->events, ev);
 }
@@ -210,8 +198,8 @@ static void write_events_csv (UfoMessenger *msger)
         ev->duration = ev->timestamp_end - ev->timestamp_start;
         gchar *type = ufo_message_type_to_char (ev->type);
 
-        fprintf (fp, "%.4f\t%.4f\t%s\t%s\t%lu\t%lu\t%lu\t%lu\n", ev->timestamp_start,
-                 ev->timestamp_end, type, ev->role,
+        fprintf (fp, "%.4f\t%.4f\t%.8f\t%s\t%s\t%lu\t%lu\t%lu\t%lu\n", ev->timestamp_start,
+                 ev->timestamp_end, ev->duration, type, ev->role,
                  ev->size_req, ev->size_resp, combined_data, total_data);
         g_free (type);
     }
@@ -291,7 +279,7 @@ ufo_messenger_send_blocking (UfoMessenger *msger,
 {
     GMutex *mutex = g_static_mutex_get_mutex (&static_mutex);
     g_mutex_lock (mutex);
-    NetworkEvent *ev = start_trace_event (msger, request);
+    NetworkEvent *ev = start_trace_event (msger, request, NULL);
     UfoMessage *msg = UFO_MESSENGER_GET_IFACE (msger)->send_blocking (msger, request, error);
     stop_trace_event (msger, msg, ev);
     g_mutex_unlock (mutex);

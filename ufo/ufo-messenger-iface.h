@@ -114,6 +114,16 @@ typedef enum {
     UFO_MESSENGER_SERVER
 } UfoMessengerRole;
 
+typedef struct {
+    gdouble timestamp_start;
+    gdouble timestamp_end;
+    gdouble duration;
+    gsize size_req;
+    gsize size_resp;
+    UfoMessageType type;
+    gchar   *role;
+} NetworkEvent;
+
 gchar * ufo_message_type_to_char (UfoMessageType);
 
 struct _UfoMessengerIface {
@@ -153,6 +163,9 @@ gpointer    ufo_messenger_get_profiler     (UfoMessenger     *msger);
 void        ufo_messenger_set_profiler     (UfoMessenger *msger, gpointer data);
 GQuark      ufo_messenger_error_quark       (void);
 GType       ufo_messenger_get_type          (void);
+
+NetworkEvent * start_trace_event (UfoMessenger *msger, UfoMessage *msg, const gchar *topic);
+void stop_trace_event (UfoMessenger *msger, UfoMessage *msg, NetworkEvent *ev);
 
 G_END_DECLS
 

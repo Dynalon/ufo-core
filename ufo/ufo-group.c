@@ -157,8 +157,9 @@ ufo_group_push_output_buffer (UfoGroup *group,
     priv = group->priv;
     priv->n_received++;
 
-    if (buffer == NULL)
-        G_BREAKPOINT();
+    if (buffer == NULL) {
+        g_critical ("buffer was NULL!");
+    }
     /* Copy or not depending on the send pattern */
     if (priv->pattern == UFO_SEND_SCATTER) {
         ufo_queue_push (priv->queues[priv->current],
