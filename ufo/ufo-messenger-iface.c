@@ -140,10 +140,10 @@ stop_trace_event (UfoMessenger *msger, UfoMessage *msg, NetworkEvent *ev)
 
     ev->timestamp_end = g_timer_elapsed (global_clock, NULL);
     ev->size_resp = 0;
-    ev->type = UFO_MESSAGE_ACK;
 
     if (msg != NULL) {
-        ev->type = msg->type;
+        if (ev->type == -1)
+            ev->type = msg->type;
         ev->size_resp = msg->data_size;
     }
 
