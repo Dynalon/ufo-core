@@ -153,6 +153,7 @@ ufo_mpi_messenger_send_blocking (UfoMessenger *msger,
         stop_trace_event (msger, NULL, ev);
         if (err != MPI_SUCCESS) {
             g_critical ("error on MPI_Ssend: %d", err);
+            goto finalize;
         }
         // g_debug ("[%d:%d] SEND payload done to: %d", priv->pid, priv->own_rank, priv->remote_rank);
     }
@@ -170,7 +171,7 @@ ufo_mpi_messenger_send_blocking (UfoMessenger *msger,
 
     // reuse the memory buffer
     DataFrame *response_frame = request_frame;
-    ev = start_trace_event (msger, NULL, "MPI_RECV_PREFLIGHT");
+    ev = start_trace_event (msger, NULL, "MPI_RECV_PREFLIGHT_SEND");
     MPI_Recv (response_frame, sizeof (DataFrame), MPI_CHAR, priv->remote_rank, 0, MPI_COMM_WORLD, &status);
     stop_trace_event (msger, NULL, ev);
 
@@ -180,7 +181,7 @@ ufo_mpi_messenger_send_blocking (UfoMessenger *msger,
     if (response_frame->data_size > 0) {
         gpointer buff = g_malloc0 (response_frame->data_size);
         // g_debug ("[%d:%d] SEND waiting for response payload from: %d", priv->pid, priv->own_rank, priv->remote_rank);
-        ev = start_trace_event (msger, NULL, "MPI_RECV_PAYLOAD");
+        ev = start_trace_event (msger, NULL, "MPI_RECV_PAYLOAD_SEND");
         MPI_Recv (buff, response_frame->data_size, MPI_CHAR, priv->remote_rank, 0, MPI_COMM_WORLD, &status);
         stop_trace_event (msger, NULL, ev);
         // g_debug ("[%d:%d] SEND payload received from: %d", priv->pid, priv->own_rank, priv->remote_rank);
@@ -213,7 +214,7 @@ ufo_mpi_messenger_recv_blocking (UfoMessenger *msger,
     MPI_Status status;
 
     // g_debug ("[%d:%d] RECV waiting for preflight from %d", priv->pid, priv->own_rank, priv->remote_rank);
-    ev = start_trace_event (msger, NULL, "MPI_RECV_PREFLIGHT");
+    ev = start_trace_event (msger, NULL, "MPI_RECV_PREFLIGHT_RECV");
     int ret = MPI_Recv (frame, sizeof (DataFrame), MPI_CHAR, priv->remote_rank, 0, MPI_COMM_WORLD, &status);
     stop_trace_event (msger, NULL, ev);
 
@@ -226,7 +227,7 @@ ufo_mpi_messenger_recv_blocking (UfoMessenger *msger,
 
     if (frame->data_size > 0) {
         gpointer buff = g_malloc0 (frame->data_size);
-        ev = start_trace_event (msger, NULL, "MPI_RECV_PAYLOAD");
+        ev = start_trace_event (msger, NULL, "MPI_RECV_PAYLOAD_RECV");
         MPI_Recv (buff, frame->data_size, MPI_CHAR, priv->remote_rank, 0, MPI_COMM_WORLD, &status);
         stop_trace_event (msger, NULL, ev);
         // g_debug ("[%d:%d] RECV payload received from %d, size: %lu", priv->pid, priv->own_rank, priv->remote_rank, frame->data_size);
