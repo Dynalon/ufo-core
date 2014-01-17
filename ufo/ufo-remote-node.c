@@ -38,6 +38,29 @@ struct _UfoRemoteNodePrivate {
     gchar *addr;
 };
 
+static GTimer *global_clock;
+
+typedef struct {
+	gdouble start;
+	gchar *msg;
+} TraceHandle;
+
+static TraceHandle * trace_start (const gchar *msg)
+{
+	TraceHandle *th = g_malloc (sizeof(TraceHandle));
+	th->msg = g_strdup (msg);
+	th->start = g_timer_elapsed (global_clock, NULL);
+	return th;
+}
+static void trace_stop (TraceHandle *th)
+{
+	gdouble now = g_timer_elapsed (global_clock, NULL);
+	gdouble delta = now - th->start;
+	g_debug ("%.4f\t%.4f-%.4f\t%s", delta, th->start, now, th->msg);
+	g_free (th->msg);
+	g_free (th);
+}
+
 UfoNode *
 ufo_remote_node_new (const gchar *address)
 {
@@ -209,6 +232,7 @@ ufo_remote_node_send_inputs (UfoRemoteNode *node,
     // determine our total message size
     guint64 size = sizeof (struct _Header);
 
+    TraceHandle *th = trace_start ("COPY_SEND_INPUT_BUFFER");
     for (guint i = 0; i < priv->n_inputs; i++) {
         guint64 buffer_size = ufo_buffer_get_size (inputs[i]);
         size += buffer_size;
@@ -228,7 +252,7 @@ ufo_remote_node_send_inputs (UfoRemoteNode *node,
         memcpy (base, ufo_buffer_get_host_array (inputs[i], NULL), header->buffer_size);
         base += header->buffer_size;
     }
-
+    trace_stop (th);
     request = ufo_message_new (UFO_MESSAGE_SEND_INPUTS, size);
     g_free (request->data);
     request->data = buffer;
@@ -251,6 +275,7 @@ ufo_remote_node_get_result (UfoRemoteNode *node,
     request = ufo_message_new (UFO_MESSAGE_GET_RESULT, 0);
     response = ufo_messenger_send_blocking (priv->msger, request, NULL);
 
+    TraceHandle *th = trace_start ("COPY_GET_RESULTS_BUFFER");
     ufo_buffer_discard_location (buffer);
     host_array = ufo_buffer_get_host_array (buffer, NULL);
     g_assert (ufo_buffer_get_size (buffer) == response->data_size);
@@ -259,6 +284,8 @@ ufo_remote_node_get_result (UfoRemoteNode *node,
 
     ufo_message_free (request);
     ufo_message_free (response);
+
+    trace_stop (th);
 }
 
 void
@@ -332,6 +359,7 @@ static void
 ufo_remote_node_class_init (UfoRemoteNodeClass *klass)
 {
     GObjectClass *oclass;
+    global_clock = g_timer_new ();
 
     oclass = G_OBJECT_CLASS (klass);
     oclass->dispose = ufo_remote_node_dispose;
