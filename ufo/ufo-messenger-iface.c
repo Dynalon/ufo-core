@@ -98,11 +98,12 @@ get_ip_and_port (gchar *str)
 }
 
 static NetworkProfiler *
-init_profiler (UfoMessenger *msger, gchar *addr)
+init_profiler (UfoMessenger *msger, gchar *addr, UfoMessengerRole role)
 {
     NetworkProfiler *p = g_malloc0 (sizeof(NetworkProfiler));
     p->events = NULL;
     p->addr = get_ip_and_port (addr);
+    p->role = role;
     gpointer data = (gpointer) p;
     ufo_messenger_set_profiler (msger, data);
     return p;
@@ -243,7 +244,7 @@ ufo_messenger_connect (UfoMessenger *msger,
 
     if (global_clock == NULL)
         global_clock = g_timer_new ();
-    init_profiler (msger, addr);
+    init_profiler (msger, addr, role);
     UFO_MESSENGER_GET_IFACE (msger)->connect (msger, addr, role);
 
     g_mutex_unlock (mutex);

@@ -148,7 +148,7 @@ ufo_mpi_messenger_send_blocking (UfoMessenger *msger,
     // send payload
     if (request_msg->data_size > 0) {
         // g_debug ("[%d:%d] SEND sending payload to: %d, size: %lu", priv->pid, priv->own_rank, priv->remote_rank, request_msg->data_size);
-        ev = start_trace_event (msger, NULL, "MPI_SEND_PAYLOAD");
+        ev = start_trace_event (msger, NULL, "MPI_SEND_PAYLOAD_SEND");
         int err = MPI_Ssend (request_msg->data, request_msg->data_size, MPI_CHAR, priv->remote_rank, 0, MPI_COMM_WORLD);
         stop_trace_event (msger, NULL, ev);
         if (err != MPI_SUCCESS) {
