@@ -18,6 +18,7 @@
  */
 
 #include <ufo/ufo-zmq-messenger.h>
+#include <ufo/ufo-messenger-iface.h>
 #include <zmq.h>
 #include <string.h>
 
@@ -38,6 +39,7 @@ struct _UfoZmqMessengerPrivate {
     gpointer zmq_socket;
     gpointer zmq_ctx;
     UfoMessengerRole role;
+    gpointer profiler;
 };
 
 /* C99 allows flexible length structs that we use to map
@@ -157,9 +159,13 @@ ufo_zmq_messenger_send_blocking (UfoMessenger *msger,
     frame->data_size = request_msg->data_size;
     frame->type = request_msg->type;
     //TODO eliminate extra copying
+    NetworkEvent *ev = start_trace_event (msger, NULL, "ZMQ_MEMCPY_SEND");
     memcpy (frame->data, request_msg->data, request_msg->data_size);
+    stop_trace_event (msger, NULL, ev);
 
+    ev = start_trace_event (msger, NULL, "ZMQ_SEND_PAYLOAD_SEND");
     gint err = zmq_msg_send (&request, priv->zmq_socket, 0);
+    stop_trace_event (msger, NULL, ev);
     zmq_msg_close (&request);
 
     if (err < 0) {
@@ -182,7 +188,9 @@ ufo_zmq_messenger_send_blocking (UfoMessenger *msger,
     zmq_msg_t reply;
     zmq_msg_init (&reply);
 
+    ev = start_trace_event (msger, NULL, "ZMQ_RECV_PAYLOAD_SEND");
     err = zmq_msg_recv (&reply, priv->zmq_socket, 0);
+    stop_trace_event (msger, NULL, ev);
     gint size = zmq_msg_size (&reply);
     if (err < 0) {
         g_set_error (error, ufo_messenger_error_quark (), zmq_errno(),
@@ -202,7 +210,9 @@ ufo_zmq_messenger_send_blocking (UfoMessenger *msger,
     }
 
     UfoMessage *reply_msg = ufo_message_new (resp_frame->type, resp_frame->data_size);
+    ev = start_trace_event (msger, NULL, "ZMQ_MEMCPY_RECV");
     memcpy (reply_msg->data, resp_frame->data, resp_frame->data_size);
+    stop_trace_event (msger, NULL, ev);
 
     zmq_msg_close (&reply);
     result = reply_msg;
@@ -226,7 +236,9 @@ ufo_zmq_messenger_recv_blocking (UfoMessenger *msger,
     UfoMessage *result = NULL;
     zmq_msg_t reply;
     zmq_msg_init (&reply);
+    NetworkEvent *ev = start_trace_event (msger, NULL, "ZMQ_RECV_PAYLOAD_RECV");
     gint err = zmq_msg_recv (&reply, priv->zmq_socket, 0);
+    stop_trace_event (msger, NULL, ev);
     gint size = zmq_msg_size (&reply);
 
     if (err < 0) {
@@ -260,6 +272,20 @@ ufo_zmq_messenger_recv_blocking (UfoMessenger *msger,
         return result;
 }
 
+gpointer
+ufo_zmq_messenger_get_profiler (UfoMessenger *msger)
+{
+    UfoZmqMessengerPrivate *priv = UFO_ZMQ_MESSENGER_GET_PRIVATE (msger);
+    return priv->profiler;
+}
+
+void
+ufo_zmq_messenger_set_profiler (UfoMessenger *msger, gpointer data)
+{
+    UfoZmqMessengerPrivate *priv = UFO_ZMQ_MESSENGER_GET_PRIVATE (msger);
+    priv->profiler = data;
+}
+
 static void
 ufo_messenger_interface_init (UfoMessengerIface *iface)
 {
@@ -267,6 +293,8 @@ ufo_messenger_interface_init (UfoMessengerIface *iface)
     iface->disconnect = ufo_zmq_messenger_disconnect;
     iface->send_blocking = ufo_zmq_messenger_send_blocking;
     iface->recv_blocking = ufo_zmq_messenger_recv_blocking;
+    iface->get_profiler = ufo_zmq_messenger_get_profiler;
+    iface->set_profiler = ufo_zmq_messenger_set_profiler;
 }
 
 
