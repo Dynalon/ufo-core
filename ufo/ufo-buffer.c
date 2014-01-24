@@ -63,6 +63,7 @@ struct _UfoBufferPrivate {
     UfoMemLocation      location;
     UfoMemLocation      last_location;
     UfoBufferPool       *origin;
+    guint                id;
 };
 
 static void
@@ -272,6 +273,21 @@ ufo_buffer_release_to_pool (UfoBuffer *buffer)
         return;
     }
     ufo_buffer_pool_release (priv->origin, buffer);
+}
+    
+
+guint
+ufo_buffer_get_id (UfoBuffer *buffer)
+{
+    UfoBufferPrivate *priv = UFO_BUFFER_GET_PRIVATE (buffer);
+    return priv->id;
+}
+
+void
+ufo_buffer_set_id (UfoBuffer *buffer, guint id)
+{
+    UfoBufferPrivate *priv = UFO_BUFFER_GET_PRIVATE (buffer);
+    priv->id = id;
 }
 
 /**
@@ -953,6 +969,23 @@ ufo_buffer_param_set_default (GParamSpec *pspec, GValue *value)
     bspec->default_value = NULL;
     g_value_unset(value);
 }
+
+// for debugging
+gfloat ufo_buffer_get_fingerprint (UfoBuffer *buf) {
+    gfloat *data = ufo_buffer_get_host_array (buf, NULL);
+    gfloat val1 = 0.0f;
+    val1 += (gfloat)  *(    data+100);
+    val1 += (gfloat)  *(data+200);
+    val1 += (gfloat)  *(data+400);
+    val1 += (gfloat)  *(data+800);
+    val1 += (gfloat)  *(data+1600);
+    val1 += (gfloat)  *(data+3200);
+    val1 += (gfloat)  *(data+12800);
+    val1 += (gfloat)  *(data+52800);
+    val1 += (gfloat)  *(data+62800);
+    return val1;
+}
+
 
 GType
 ufo_buffer_param_get_type()
