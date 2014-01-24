@@ -275,17 +275,19 @@ ufo_remote_node_get_result (UfoRemoteNode *node,
     request = ufo_message_new (UFO_MESSAGE_GET_RESULT, 0);
     response = ufo_messenger_send_blocking (priv->msger, request, NULL);
 
-    TraceHandle *th = trace_start ("COPY_GET_RESULTS_BUFFER");
+    TraceHandle *th = trace_start ("GET_HOSTARRAY");
     ufo_buffer_discard_location (buffer);
     host_array = ufo_buffer_get_host_array (buffer, NULL);
     g_assert (ufo_buffer_get_size (buffer) == response->data_size);
+    trace_stop (th);
 
+    th = trace_start ("COPY_GET_RESULTS_BUFFER");
     memcpy (host_array, response->data, ufo_buffer_get_size (buffer));
+    trace_stop (th);
 
     ufo_message_free (request);
     ufo_message_free (response);
 
-    trace_stop (th);
 }
 
 void
