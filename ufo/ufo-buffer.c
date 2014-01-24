@@ -974,15 +974,25 @@ ufo_buffer_param_set_default (GParamSpec *pspec, GValue *value)
 gfloat ufo_buffer_get_fingerprint (UfoBuffer *buf) {
     gfloat *data = ufo_buffer_get_host_array (buf, NULL);
     gfloat val1 = 0.0f;
-    val1 += (gfloat)  *(    data+100);
+    val1 += (gfloat)  *(data+100);
     val1 += (gfloat)  *(data+200);
     val1 += (gfloat)  *(data+400);
     val1 += (gfloat)  *(data+800);
     val1 += (gfloat)  *(data+1600);
     val1 += (gfloat)  *(data+3200);
     val1 += (gfloat)  *(data+12800);
+    val1 += (gfloat)  *(data+13800);
+    val1 += (gfloat)  *(data+14800);
+    val1 += (gfloat)  *(data+15800);
     val1 += (gfloat)  *(data+52800);
     val1 += (gfloat)  *(data+62800);
+    val1 += (gfloat)  *(data+72800);
+    val1 += (gfloat)  *(data+75800);
+    val1 += (gfloat)  *(data+80800);
+    val1 += (gfloat)  *(data+81800);
+    val1 += (gfloat)  *(data+82800);
+    val1 += (gfloat)  *(data+85800);
+    val1 += (gfloat)  *(data+92800);
     return val1;
 }
 

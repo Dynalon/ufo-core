@@ -56,13 +56,14 @@ ufo_buffer_pool_acquire (UfoBufferPool *bp, UfoRequisition *requisition) {
     if (priv->allocated_buffers < priv->capacity) {
         priv->allocated_buffers++;
         g_mutex_unlock (priv->mutex);
+        g_assert (requisition->n_dims == 2);
         buffer = ufo_buffer_new (requisition, bp, priv->context);
     } else {
         g_mutex_unlock (priv->mutex);
         buffer = g_async_queue_pop (priv->pool);
-        // g_debug ("DONE ACQUIRE alloc: %d\tin queue: %d", priv->allocated_buffers, g_async_queue_length (priv->pool));
+        // TODO check that the requested requisition  matches the buffer size
+        // in the pool and resize if required
     }
-
 
     return buffer;
 }

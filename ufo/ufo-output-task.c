@@ -39,7 +39,10 @@ struct _UfoOutputTaskPrivate {
     guint n_dims;
     guint n_copies;
     GList *copies;
+    GAsyncQueue *sorted_result_queue;
 };
+
+static volatile guint *last_buffer_position;
 
 static void ufo_task_interface_init (UfoTaskIface *iface);
 static void ufo_cpu_task_interface_init (UfoCpuTaskIface *iface);
@@ -64,8 +67,6 @@ ufo_output_task_new (guint n_dims)
     return UFO_NODE (task);
 }
 
-UfoRequisition *requ = NULL;
-
 void
 ufo_output_task_get_output_requisition (UfoOutputTask *task,
                                         UfoRequisition *requisition)
@@ -80,6 +81,17 @@ ufo_output_task_get_output_requisition (UfoOutputTask *task,
     g_async_queue_push (priv->out_queue, buffer);
 }
 
+static gint
+compare_buffer_ids (gconstpointer a, gconstpointer b, gpointer *unused)
+{
+    guint id_a = ufo_buffer_get_id ((UfoBuffer *) a);
+    guint id_b = ufo_buffer_get_id ((UfoBuffer *) b);
+
+    if (id_a < id_b) return -1;
+    if (id_a > id_b) return +1;
+    g_assert (id_a != id_b);
+}
+
 /**
  * ufo_output_task_get_output_buffer:
  * @task: A #UfoInputTask
@@ -89,11 +101,31 @@ ufo_output_task_get_output_requisition (UfoOutputTask *task,
  *
  * Return value: (transfer full): A #UfoBuffer for reading output data.
  */
+
 UfoBuffer *
 ufo_output_task_get_output_buffer (UfoOutputTask *task)
 {
+    UfoBuffer *buffer;
     g_return_val_if_fail (UFO_IS_OUTPUT_TASK (task), NULL);
-    return g_async_queue_pop (task->priv->out_queue);
+    // g_async_queue_pop (task->priv->out_queue);
+
+    // this returns a result - not an empty buffer for reuse
+    // we need to make sure the buffers leave the queue in their order they were received
+    buffer = g_async_queue_pop (task->priv->sorted_result_queue);
+    while (ufo_buffer_get_id (buffer) != (guint) g_atomic_int_get (last_buffer_position)) {
+        g_async_queue_push_sorted (task->priv->sorted_result_queue,
+                                   buffer,
+                                   (GCompareDataFunc) compare_buffer_ids,
+                                   NULL);
+        g_debug ("yielding!");
+        g_thread_yield ();
+        buffer = g_async_queue_pop (task->priv->sorted_result_queue);
+    }
+    g_debug ("popped in order buffer no. #%d", g_atomic_int_get (last_buffer_position));
+    g_atomic_int_add (last_buffer_position, 1);
+
+    g_debug ("Getting output buffer FP[%d]: %.6f", *last_buffer_position - 1, ufo_buffer_get_fingerprint (buffer));
+    return buffer;
 }
 
 void
@@ -101,6 +133,7 @@ ufo_output_task_release_output_buffer (UfoOutputTask *task,
                                        UfoBuffer *buffer)
 {
     g_return_if_fail (UFO_IS_OUTPUT_TASK (task));
+    g_debug ("pushing back to input buffer: %.6f", ufo_buffer_get_fingerprint(buffer));
     g_async_queue_push (task->priv->in_queue, buffer);
 }
 
@@ -133,6 +166,7 @@ ufo_output_task_get_structure (UfoTask *task,
     (*in_params)[0].n_dims = priv->n_dims;
 }
 
+static guint buffer_count = 0;
 static gboolean
 ufo_output_task_process (UfoCpuTask *task,
                          UfoBuffer **outputs,
@@ -148,6 +182,7 @@ ufo_output_task_process (UfoCpuTask *task,
 
     priv = UFO_OUTPUT_TASK_GET_PRIVATE (task);
 
+    // creates a copy so that we have 2 buffer that circle between in and out queue
     if (priv->n_copies == 0) {
         copy = ufo_buffer_dup (outputs[0]);
         g_async_queue_push (priv->in_queue, copy);
@@ -158,6 +193,16 @@ ufo_output_task_process (UfoCpuTask *task,
     copy = g_async_queue_pop (priv->in_queue);
     ufo_buffer_copy (outputs[0], copy);
     g_async_queue_push (priv->out_queue, copy);
+    
+    // TODO avoid costly buffer copy?
+    UfoBuffer *result_output = ufo_buffer_dup (copy);
+    ufo_buffer_copy (copy, result_output);
+    ufo_buffer_set_id (result_output, buffer_count++);
+    g_debug ("the result copy has FP[%d]: %.6f", buffer_count - 1, ufo_buffer_get_fingerprint (result_output));
+    g_async_queue_push_sorted (priv->sorted_result_queue,
+                               result_output,
+                               (GCompareDataFunc) compare_buffer_ids,
+                               NULL); 
     return TRUE;
 }
 
@@ -229,6 +274,8 @@ ufo_output_task_class_init (UfoOutputTaskClass *klass)
     gobject_class->finalize = ufo_output_task_finalize;
 
     g_type_class_add_private (gobject_class, sizeof(UfoOutputTaskPrivate));
+
+    last_buffer_position = g_malloc0 (sizeof(guint)); 
 }
 
 static void
@@ -237,8 +284,10 @@ ufo_output_task_init (UfoOutputTask *task)
     task->priv = UFO_OUTPUT_TASK_GET_PRIVATE (task);
     task->priv->out_queue = g_async_queue_new ();
     task->priv->in_queue = g_async_queue_new ();
+    task->priv->sorted_result_queue = g_async_queue_new ();
     task->priv->n_copies = 0;
     task->priv->copies = NULL;
+    *last_buffer_position = 0;
 
     ufo_task_node_set_plugin_name (UFO_TASK_NODE (task), "output-task");
 }

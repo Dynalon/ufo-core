@@ -46,8 +46,8 @@
 
 // best result with 10 for zmq ipc:// transport
 #define MAX_REMOTE_IN_FLIGHT 100
-#define MAX_POOL_LEN 20
-#define POOL_SPARE 20
+#define MAX_POOL_LEN 1000
+#define POOL_SPARE 1000
 static gpointer static_context;
 static volatile gint *send_pending;
 static GMutex *send_pending_lock;
@@ -515,49 +515,46 @@ static void run_remote_task_singlethreaded (TaskLocalData *tld)
 
     gint in_flight = 0;
     gboolean got_requisition = FALSE;
+    gint num_received = 0;
+    gint num_expected = 0;
 
     while (active) {
         while (in_flight < max_in_flight) {
+            // TODO this pop periodically returns the same images
             gpointer next_input = g_async_queue_pop (ufo_task_node_get_input_queue (self));
-            if ((int *)next_input == UFO_END_OF_STREAM) {
+            // if (!get_inputs (tld, &next_input)) {
+            if ((int *)next_input == UFO_END_OF_STREAM || ufo_buffer_get_fingerprint (next_input) == 0.0) {
+                g_debug ("BREAK: in_flight: %d, num_expected: %d", in_flight, num_expected);
                 active = FALSE;
                 break;
+            } else {
+                num_expected++;
             }
             input = (UfoBuffer *) next_input;
+            g_debug ("REMOTE POP FP: %.6f", ufo_buffer_get_fingerprint (next_input));
 
             ufo_remote_node_send_inputs (remote, &input);
             ufo_buffer_release_to_pool (input);
             in_flight++;
         }
 
-        //g_atomic_int_add (send_pending, 1);
+        if (!active) {
 
-        if (!active)
+            g_debug ("OUTBREAK: in_flight: %d, num_expected: %d", in_flight, num_expected);
             break;
 
-            if (G_UNLIKELY (!got_requisition)) {
-        	ufo_remote_node_get_requisition (remote, &requisition);
+        }
+
+
+
+        while (in_flight > 0) {
+            if (G_UNLIKELY (!got_requisition || TRUE)) {
+                ufo_remote_node_get_requisition (remote, &requisition);
                 got_requisition = TRUE;
             }
-        // implicit sprint barrier, wait until all remote node threads have sent their data
-        // as i.e. the MPI messenger uses a global lock for send/recv, we don't want
-        // outstanding sends to interfere with recevies
-        /*while (g_atomic_int_get (send_pending) != n_remotes) {
-		    g_thread_yield ();
-        }
-
-        g_mutex_lock(send_pending_lock);
-        if (send_pending >= n_remotes) {
-            g_atomic_int_set (send_pending, 0);
-        }
-        g_mutex_unlock(send_pending_lock); */
-
-        // this is a nasty bug that arises from the "hybrid approach" - theremote
-        // node will have 2 GPUs, and a "branch" is blocking if no new input
-        // is supplied??
-        while (in_flight > 0) {
             output = ufo_buffer_pool_acquire (obp, &requisition);
             ufo_remote_node_get_result (remote, output);
+            num_received++;
             in_flight--;
             push_to_least_utilized_queue (output, successor_queues);
         }
@@ -565,12 +562,22 @@ static void run_remote_task_singlethreaded (TaskLocalData *tld)
     // HACK should be 0 but we have a race then
     g_debug ("start to collect outstanding buffers");
     while (in_flight > 0) {
+        if (G_UNLIKELY (!got_requisition || TRUE)) {
+            ufo_remote_node_get_requisition (remote, &requisition);
+            got_requisition = TRUE;
+        }
         //ufo_remote_node_get_requisition (remote, &requisition);
         output = ufo_buffer_pool_acquire (obp, &requisition);
+        g_debug("a");
         ufo_remote_node_get_result (remote, output);
+        g_debug("b");
+        num_received++;
         in_flight--;
         push_to_least_utilized_queue (output, successor_queues);
+        g_debug("c");
     }
+    g_debug ("num_received: %d, num_expected: %d", num_received, num_expected);
+    g_assert (num_received == num_expected);
     send_poisonpill_to_nodes (successor_queues);
     g_debug ("\tTASK EXITING: %s", ufo_task_node_get_unique_name (UFO_TASK_NODE (tld->task)));
 }
@@ -723,6 +730,7 @@ run_task_simple (TaskLocalData *tld)
 
     return NULL;
 }
+
 
 static gpointer
 run_task (TaskLocalData *tld)
@@ -922,14 +930,14 @@ setup_tasks (UfoSchedulerPrivate *priv,
     return tlds;
 }
 
-static void print_groups (UfoTaskNode *node) {
-    GList *in_groups = ufo_task_node_get_in_groups (node);
-    for (guint i=0; i < g_list_length (in_groups); i++) {
-        g_debug("\t\tIN GROUP: %p", (void*) g_list_nth_data (in_groups, i));
-    }
-    UfoGroup *out_group = ufo_task_node_get_out_group (node);
-    g_debug("\t\tOUT GROUP: %p", (void *) out_group);
-}
+// static void print_groups (UfoTaskNode *node) {
+//     GList *in_groups = ufo_task_node_get_in_groups (node);
+//     for (guint i=0; i < g_list_length (in_groups); i++) {
+//         g_debug("\t\tIN GROUP: %p", (void*) g_list_nth_data (in_groups, i));
+//     }
+//     UfoGroup *out_group = ufo_task_node_get_out_group (node);
+//     g_debug("\t\tOUT GROUP: %p", (void *) out_group);
+// }
 
 static void print_group_summary (GList *groups)
 {
@@ -949,60 +957,60 @@ static void print_group_summary (GList *groups)
 */
 }
 
-static GList *
-setup_groups2 (UfoSchedulerPrivate *priv,
-               UfoTaskGraph *task_graph)
-{
-    // ASSUMPTIONS: A Task is in exactly one group. A Group has exactly one task
-    // A group has n inputs, and 1 output
-    GList *groups;
-    GList *nodes;
-    cl_context context;
+// static GList *
+// setup_groups2 (UfoSchedulerPrivate *priv,
+//                UfoTaskGraph *task_graph)
+// {
+//     // ASSUMPTIONS: A Task is in exactly one group. A Group has exactly one task
+//     // A group has n inputs, and 1 output
+//     GList *groups;
+//     GList *nodes;
+//     cl_context context;
 
-    groups = NULL;
-    nodes = ufo_graph_get_nodes (UFO_GRAPH (task_graph));
-    context = ufo_resources_get_context (priv->resources);
+//     groups = NULL;
+//     nodes = ufo_graph_get_nodes (UFO_GRAPH (task_graph));
+//     context = ufo_resources_get_context (priv->resources);
 
-    // add each task node into its own group that it writes it output to
-    // hack we rely on the order of the GList groups to remain the same
-    for (GList *it = g_list_first (nodes); it != NULL; it = g_list_next (it)) {
-        UfoTaskNode *node = UFO_TASK_NODE (it->data);
-        UfoSendPattern pattern = ufo_task_node_get_send_pattern (node);
-        GList *task_nodes_for_group = g_list_append (NULL, node);
-        UfoGroup *group = ufo_group_new (task_nodes_for_group, context, pattern);
-        g_assert (UFO_IS_GROUP (group));
-        groups = g_list_append (groups, group);
-        ufo_task_node_set_own_group (node, group);
-        ufo_task_node_set_out_group (UFO_TASK_NODE (node), group);
-    }
+//     // add each task node into its own group that it writes it output to
+//     // hack we rely on the order of the GList groups to remain the same
+//     for (GList *it = g_list_first (nodes); it != NULL; it = g_list_next (it)) {
+//         UfoTaskNode *node = UFO_TASK_NODE (it->data);
+//         UfoSendPattern pattern = ufo_task_node_get_send_pattern (node);
+//         GList *task_nodes_for_group = g_list_append (NULL, node);
+//         UfoGroup *group = ufo_group_new (task_nodes_for_group, context, pattern);
+//         g_assert (UFO_IS_GROUP (group));
+//         groups = g_list_append (groups, group);
+//         ufo_task_node_set_own_group (node, group);
+//         ufo_task_node_set_out_group (UFO_TASK_NODE (node), group);
+//     }
 
-    // now fuse the inputs & outputs of the tasknode's corresponding group
-    for (GList *it = g_list_first (nodes); it != NULL; it = g_list_next (it)) {
-        UfoTaskNode *node = UFO_TASK_NODE (it->data);
-        UfoGroup *node_group = ufo_task_node_get_own_group (node);
-        g_assert (UFO_IS_GROUP (node_group));
-        g_assert (node != NULL);
-        GList *successors = ufo_graph_get_successors (UFO_GRAPH (task_graph), UFO_NODE(node));
+//     // now fuse the inputs & outputs of the tasknode's corresponding group
+//     for (GList *it = g_list_first (nodes); it != NULL; it = g_list_next (it)) {
+//         UfoTaskNode *node = UFO_TASK_NODE (it->data);
+//         UfoGroup *node_group = ufo_task_node_get_own_group (node);
+//         g_assert (UFO_IS_GROUP (node_group));
+//         g_assert (node != NULL);
+//         GList *successors = ufo_graph_get_successors (UFO_GRAPH (task_graph), UFO_NODE(node));
 
-        // set input of all successors to the output of the predecessor
-        gint i = 0;
-        for (GList *jt = g_list_first (successors); jt != NULL; jt = g_list_next (jt)) {
-            UfoTaskNode *target_node = UFO_TASK_NODE (jt->data);
-            UfoGroup *target_group = ufo_task_node_get_own_group (target_node);
-            g_assert (target_group != NULL);
-            ufo_task_node_add_in_group (target_node, i, node_group);
+//         // set input of all successors to the output of the predecessor
+//         gint i = 0;
+//         for (GList *jt = g_list_first (successors); jt != NULL; jt = g_list_next (jt)) {
+//             UfoTaskNode *target_node = UFO_TASK_NODE (jt->data);
+//             UfoGroup *target_group = ufo_task_node_get_own_group (target_node);
+//             g_assert (target_group != NULL);
+//             ufo_task_node_add_in_group (target_node, i, node_group);
 
-            // gint num_expected = ufo_task_node_get_num_expected (node, i);
-            ufo_group_set_num_expected (target_group, target_node, 0);
-            //i++;
-        }
-        g_list_free (successors);
-    }
+//             // gint num_expected = ufo_task_node_get_num_expected (node, i);
+//             ufo_group_set_num_expected (target_group, target_node, 0);
+//             //i++;
+//         }
+//         g_list_free (successors);
+//     }
 
-    g_list_free (nodes);
-    print_group_summary (groups);
-    return groups;
-}
+//     g_list_free (nodes);
+//     print_group_summary (groups);
+//     return groups;
+// }
 
 static GList *
 setup_groups (UfoSchedulerPrivate *priv,

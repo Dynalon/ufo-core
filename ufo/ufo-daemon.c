@@ -72,6 +72,29 @@ struct _UfoDaemonPrivate {
 };
 
 static gpointer run_scheduler (UfoDaemon *daemon);
+static GTimer *global_clock;
+
+typedef struct {
+    gfloat start;
+    gchar *msg;
+} TraceHandle;
+
+static TraceHandle *
+start_trace (const gchar *msg)
+{
+    TraceHandle *th = g_new0 (TraceHandle, 1);
+    th->msg = g_strdup (msg);
+    th->start = g_timer_elapsed (global_clock, NULL);
+    return th;
+}
+static void
+stop_trace (TraceHandle *th)
+{
+    gfloat now = g_timer_elapsed (global_clock, NULL);
+    g_debug ("%s took %.6f", th->msg, now - th->start);
+    g_free (th->msg);
+    g_free (th);
+}
 
 UfoDaemon *
 ufo_daemon_new (UfoConfig *config, gchar *listen_address)
@@ -289,6 +312,8 @@ handle_send_inputs (UfoDaemon *daemon, UfoMessage *request)
     UfoRequisition requisition;
     gpointer context;
 
+    TraceHandle *th = start_trace ("INPUT MEMCPY");
+    
     context = ufo_scheduler_get_context (priv->scheduler);
 
     struct _Header {
@@ -313,6 +338,7 @@ handle_send_inputs (UfoDaemon *daemon, UfoMessage *request)
             ufo_buffer_get_size (priv->input));
     ufo_input_task_release_input_buffer (UFO_INPUT_TASK (priv->input_task), priv->input);
 
+    stop_trace (th);
     UfoMessage *response = ufo_message_new (UFO_MESSAGE_ACK, 0);
     ufo_messenger_send_blocking (priv->msger, response, NULL);
     ufo_message_free (response);
@@ -503,6 +529,8 @@ ufo_daemon_start_impl (UfoDaemon *daemon)
             */
             wait_for_messages = FALSE;
         } else {
+            // spawn a new thread that handles this request
+
             wait_for_messages = handle_incoming (daemon, msg);
             ufo_message_free (msg);
         }
@@ -624,6 +652,8 @@ ufo_daemon_class_init (UfoDaemonClass *klass)
     oclass->finalize = ufo_daemon_finalize;
 
     g_type_class_add_private (klass, sizeof (UfoDaemonPrivate));
+
+    global_clock = g_timer_new ();
 }
 
 static void
