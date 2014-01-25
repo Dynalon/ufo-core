@@ -309,39 +309,37 @@ static void
 handle_send_inputs (UfoDaemon *daemon, UfoMessage *request)
 {
     UfoDaemonPrivate *priv = UFO_DAEMON_GET_PRIVATE (daemon);
-    UfoRequisition requisition;
-    gpointer context;
+    gpointer context = ufo_scheduler_get_context (priv->scheduler);
 
-    TraceHandle *th = start_trace ("INPUT MEMCPY");
-    
-    context = ufo_scheduler_get_context (priv->scheduler);
+    UfoRequisition *requisition = (UfoRequisition *) request->data;
 
-    struct _Header {
-        UfoRequisition requisition;
-        guint64 buffer_size;
-    };
-
-    char *base = request->data;
-    struct _Header *header = (struct _Header *) base;
-
-    /* Receive buffer size */
-    requisition = header->requisition;
     if (priv->input == NULL) {
-        priv->input = ufo_buffer_new (&requisition, NULL, context);
+        priv->input = ufo_buffer_new (requisition, NULL, context);
     }
     else {
-        if (ufo_buffer_cmp_dimensions (priv->input, &requisition))
-            ufo_buffer_resize (priv->input, &requisition);
+        if (ufo_buffer_cmp_dimensions (priv->input, requisition))
+            ufo_buffer_resize (priv->input, requisition);
     }
-    memcpy (ufo_buffer_get_host_array (priv->input, NULL),
-            base + sizeof (struct _Header),
-            ufo_buffer_get_size (priv->input));
+
+    UfoMessage *data_msg = ufo_messenger_recv_blocking (priv->msger, NULL);
+
+    TraceHandle *th = start_trace ("INPUT MEMCPY");
+    // TODO FREE the host_mem of the ufo-buffer, else we leak it!
+    // TODO we need an API for that
+    // memcpy (ufo_buffer_get_host_array (priv->input, NULL),
+    //         base + sizeof (struct _Header),
+    //         ufo_buffer_get_size (priv->input));
+    // TODO assert msg_data size equals the size of the requisition 
+    gpointer ufo_buffer_mem = ufo_buffer_get_host_array (priv->input, NULL);
+    ufo_buffer_mem = &data_msg->data;
+
     ufo_input_task_release_input_buffer (UFO_INPUT_TASK (priv->input_task), priv->input);
 
     stop_trace (th);
     UfoMessage *response = ufo_message_new (UFO_MESSAGE_ACK, 0);
     ufo_messenger_send_blocking (priv->msger, response, NULL);
     ufo_message_free (response);
+    g_free (data_msg);
 }
 
 UfoRequisition *req = NULL;

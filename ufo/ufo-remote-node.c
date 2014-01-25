@@ -213,54 +213,50 @@ ufo_remote_node_send_inputs (UfoRemoteNode *node,
                              UfoBuffer **inputs)
 {
     UfoRemoteNodePrivate *priv;
-    UfoMessage *request;
 
     g_return_if_fail (UFO_IS_REMOTE_NODE (node));
 
     priv = node->priv;
 
-    /*
-     * For each of the input data items send two frames: the first one contains
-     * the size as an UfoRequisition struct and the second one the raw byte
-     * data.
-     */
-    struct _Header {
-        UfoRequisition requisition;
-        guint64 buffer_size;
-    };
+    // we currently only support one input
+    g_assert (priv->n_inputs == 1);
 
-    // determine our total message size
-    guint64 size = sizeof (struct _Header);
-
-    for (guint i = 0; i < priv->n_inputs; i++) {
-        guint64 buffer_size = ufo_buffer_get_size (inputs[i]);
-        size += buffer_size;
-    }
-    gsize buffer_size = priv->n_inputs * sizeof (struct _Header) + size;
-    gpointer buffer = g_malloc (buffer_size);
-
-    char *base = buffer;
-
-    for (guint i = 0; i < priv->n_inputs; i++) {
-        struct _Header *header = g_new0 (struct _Header, 1);
-        ufo_buffer_get_requisition (inputs[i], &header->requisition);
-        header->buffer_size = (guint64) ufo_buffer_get_size (inputs[i]);
-
-        memcpy (base, header, sizeof (struct _Header));
-        base += sizeof (struct _Header);
-    	TraceHandle *th = trace_start ("GET_HOSTARRAY_SEND_INPUT_BUFFER");
-        gpointer host_array = ufo_buffer_get_host_array (inputs[i], NULL);
-    	trace_stop (th);
-    	th = trace_start ("MEMCPY_SEND_INPUT_BUFFER");
-        memcpy (base, host_array, header->buffer_size);
-    	trace_stop (th);
-        base += header->buffer_size;
-    }
-    request = ufo_message_new (UFO_MESSAGE_SEND_INPUTS, size);
-    g_free (request->data);
-    request->data = buffer;
-    // send as a single message
+    // first, send the requisition of the input
+    UfoRequisition requisition;
+    ufo_buffer_get_requisition (inputs[0], &requisition);
+    UfoMessage *request = ufo_message_new (UFO_MESSAGE_SEND_INPUTS, 0);
+    request->data = &requisition;
+    request->data_size = sizeof (UfoRequisition);
     ufo_messenger_send_blocking (priv->msger, request, NULL);
+    g_free (request);
+
+    // second, send the input payload
+    request = ufo_message_new (UFO_MESSAGE_SEND_INPUTS, 0);
+    request->data_size = ufo_buffer_get_size (inputs[0]);
+    request->data = ufo_buffer_get_host_array (inputs[0], NULL);
+    ufo_messenger_send_blocking (priv->msger, request, NULL);
+    g_free (request);
+
+    // for (guint i = 0; i < priv->n_inputs; i++) {
+    //     struct _Header *header = g_new0 (struct _Header, 1);
+    //     guint64 size = sizeof (struct _Header) + ufo_buffer_get_size (inputs[i]);
+    //     ufo_buffer_get_requisition (inputs[i], &header->requisition);
+
+    //     memcpy (base, header, sizeof (struct _Header));
+    //     base += sizeof (struct _Header);
+    // 	TraceHandle *th = trace_start ("GET_HOSTARRAY_SEND_INPUT_BUFFER");
+    //     gpointer host_array = ufo_buffer_get_host_array (inputs[i], NULL);
+    // 	trace_stop (th);
+    // 	th = trace_start ("MEMCPY_SEND_INPUT_BUFFER");
+    //     memcpy (base, host_array, header->buffer_size);
+    // 	trace_stop (th);
+    //     base += header->buffer_size;
+    // }
+    // request = ufo_message_new (UFO_MESSAGE_SEND_INPUTS, size);
+    // g_free (request->data);
+    // request->data = buffer;
+    // send as a single message
+    // ufo_messenger_send_blocking (priv->msger, request, NULL);
 
 }
 
