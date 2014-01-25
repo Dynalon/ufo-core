@@ -82,14 +82,15 @@ ufo_output_task_get_output_requisition (UfoOutputTask *task,
 }
 
 static gint
-compare_buffer_ids (gconstpointer a, gconstpointer b, gpointer *unused)
+compare_buffer_ids (gpointer a, gpointer b, gpointer *unused)
 {
-    guint id_a = ufo_buffer_get_id ((UfoBuffer *) a);
-    guint id_b = ufo_buffer_get_id ((UfoBuffer *) b);
+    gint id_a = ufo_buffer_get_id ((UfoBuffer *) a);
+    gint id_b = ufo_buffer_get_id ((UfoBuffer *) b);
 
     if (id_a < id_b) return -1;
     if (id_a > id_b) return +1;
     g_assert (id_a != id_b);
+    return 0;
 }
 
 /**
