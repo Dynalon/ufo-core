@@ -229,7 +229,7 @@ ufo_remote_node_send_inputs (UfoRemoteNode *node,
     request->data_size = sizeof (UfoRequisition);
     ufo_messenger_send_blocking (priv->msger, request, NULL);
     g_free (request);
-
+    
     // second, send the input payload
     request = ufo_message_new (UFO_MESSAGE_SEND_INPUTS, 0);
     request->data_size = ufo_buffer_get_size (inputs[0]);

@@ -312,6 +312,11 @@ handle_send_inputs (UfoDaemon *daemon, UfoMessage *request)
     gpointer context = ufo_scheduler_get_context (priv->scheduler);
 
     UfoRequisition *requisition = (UfoRequisition *) request->data;
+   
+    // send the ack for that 
+    UfoMessage *response = ufo_message_new (UFO_MESSAGE_ACK, 0);
+    ufo_messenger_send_blocking (priv->msger, response, NULL);
+    ufo_message_free (response);
 
     if (priv->input == NULL) {
         priv->input = ufo_buffer_new (requisition, NULL, context);
@@ -320,9 +325,8 @@ handle_send_inputs (UfoDaemon *daemon, UfoMessage *request)
         if (ufo_buffer_cmp_dimensions (priv->input, requisition))
             ufo_buffer_resize (priv->input, requisition);
     }
-
+    
     UfoMessage *data_msg = ufo_messenger_recv_blocking (priv->msger, NULL);
-
     TraceHandle *th = start_trace ("INPUT MEMCPY");
     // TODO FREE the host_mem of the ufo-buffer, else we leak it!
     // TODO we need an API for that
@@ -336,7 +340,7 @@ handle_send_inputs (UfoDaemon *daemon, UfoMessage *request)
     ufo_input_task_release_input_buffer (UFO_INPUT_TASK (priv->input_task), priv->input);
 
     stop_trace (th);
-    UfoMessage *response = ufo_message_new (UFO_MESSAGE_ACK, 0);
+    response = ufo_message_new (UFO_MESSAGE_ACK, 0);
     ufo_messenger_send_blocking (priv->msger, response, NULL);
     ufo_message_free (response);
     g_free (data_msg);
