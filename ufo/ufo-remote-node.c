@@ -273,11 +273,11 @@ ufo_remote_node_get_result (UfoRemoteNode *node,
     priv = node->priv;
     request = ufo_message_new (UFO_MESSAGE_GET_RESULT, 0);
     response = ufo_messenger_send_blocking (priv->msger, request, NULL);
-    ufo_message_free (request);
-    g_assert (ufo_buffer_get_size (buffer) == response->data_size);
 
     // ufo_buffer_discard_location (buffer);
+    g_assert (ufo_buffer_get_size (buffer) == response->data_size);
     ufo_buffer_set_host_array (buffer, response->data);
+    ufo_message_free (request);
     g_free (response);
 }
 

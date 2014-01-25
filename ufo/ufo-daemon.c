@@ -327,23 +327,14 @@ handle_send_inputs (UfoDaemon *daemon, UfoMessage *request)
     }
     
     UfoMessage *data_msg = ufo_messenger_recv_blocking (priv->msger, NULL);
-    TraceHandle *th = start_trace ("INPUT MEMCPY");
-    // TODO FREE the host_mem of the ufo-buffer, else we leak it!
-    // TODO we need an API for that
-    // memcpy (ufo_buffer_get_host_array (priv->input, NULL),
-    //         data_msg->data,
-    //         ufo_buffer_get_size (priv->input));
-    ufo_buffer_set_host_array (priv->input, data_msg->data);
-    // TODO assert msg_data size equals the size of the requisition 
-    //gpointer ufo_buffer_mem = ufo_buffer_get_host_array (priv->input, NULL);
-    //ufo_buffer_mem = &data_msg->data;
-
-    ufo_input_task_release_input_buffer (UFO_INPUT_TASK (priv->input_task), priv->input);
-
-    stop_trace (th);
     response = ufo_message_new (UFO_MESSAGE_ACK, 0);
     ufo_messenger_send_blocking (priv->msger, response, NULL);
     ufo_message_free (response);
+
+    g_assert (ufo_buffer_get_size (priv->input) == data_msg->data_size);
+    ufo_buffer_set_host_array (priv->input, data_msg->data);
+
+    ufo_input_task_release_input_buffer (UFO_INPUT_TASK (priv->input_task), priv->input);
     g_free (data_msg);
 }
 
@@ -390,7 +381,6 @@ void handle_get_result (UfoDaemon *daemon)
     size = ufo_buffer_get_size (buffer);
 
     UfoMessage *response = ufo_message_new (UFO_MESSAGE_ACK, size);
-    //memcpy (response->data, ufo_buffer_get_host_array (buffer, NULL), size);
     response->data = ufo_buffer_get_host_array (buffer, NULL);
     response->data_size = size;
     ufo_messenger_send_blocking (priv->msger, response, NULL);

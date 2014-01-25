@@ -546,7 +546,6 @@ static void run_remote_task_singlethreaded (TaskLocalData *tld)
         }
 
 
-
         while (in_flight > 0) {
             if (G_UNLIKELY (!got_requisition || TRUE)) {
                 ufo_remote_node_get_requisition (remote, &requisition);
@@ -568,13 +567,10 @@ static void run_remote_task_singlethreaded (TaskLocalData *tld)
         }
         //ufo_remote_node_get_requisition (remote, &requisition);
         output = ufo_buffer_pool_acquire (obp, &requisition);
-        g_debug("a");
         ufo_remote_node_get_result (remote, output);
-        g_debug("b");
         num_received++;
         in_flight--;
         push_to_least_utilized_queue (output, successor_queues);
-        g_debug("c");
     }
     g_debug ("num_received: %d, num_expected: %d", num_received, num_expected);
     g_assert (num_received == num_expected);
