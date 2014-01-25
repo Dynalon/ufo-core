@@ -330,12 +330,12 @@ handle_send_inputs (UfoDaemon *daemon, UfoMessage *request)
     TraceHandle *th = start_trace ("INPUT MEMCPY");
     // TODO FREE the host_mem of the ufo-buffer, else we leak it!
     // TODO we need an API for that
-    // memcpy (ufo_buffer_get_host_array (priv->input, NULL),
-    //         base + sizeof (struct _Header),
-    //         ufo_buffer_get_size (priv->input));
+    memcpy (ufo_buffer_get_host_array (priv->input, NULL),
+            data_msg->data,
+            ufo_buffer_get_size (priv->input));
     // TODO assert msg_data size equals the size of the requisition 
-    gpointer ufo_buffer_mem = ufo_buffer_get_host_array (priv->input, NULL);
-    ufo_buffer_mem = &data_msg->data;
+    //gpointer ufo_buffer_mem = ufo_buffer_get_host_array (priv->input, NULL);
+    //ufo_buffer_mem = &data_msg->data;
 
     ufo_input_task_release_input_buffer (UFO_INPUT_TASK (priv->input_task), priv->input);
 
