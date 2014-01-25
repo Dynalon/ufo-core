@@ -284,6 +284,16 @@ ufo_buffer_get_id (UfoBuffer *buffer)
     return priv->id;
 }
 
+void ufo_buffer_set_host_array (UfoBuffer *buffer, gpointer data)
+{
+    UfoBufferPrivate *priv = UFO_BUFFER_GET_PRIVATE (buffer);
+    if (priv->host_array != NULL) {
+        g_free (priv->host_array);
+    }
+    priv->host_array = (gfloat *) data;
+    priv->location = UFO_LOCATION_HOST;
+}
+
 void
 ufo_buffer_set_id (UfoBuffer *buffer, guint id)
 {

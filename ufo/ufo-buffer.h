@@ -133,6 +133,7 @@ void        ufo_buffer_release_to_pool      (UfoBuffer      *buffer);
 UfoBuffer  *ufo_buffer_dup                  (UfoBuffer      *buffer);
 gfloat*     ufo_buffer_get_host_array       (UfoBuffer      *buffer,
                                              gpointer        cmd_queue);
+void        ufo_buffer_set_host_array       (UfoBuffer *buf, gpointer data);
 gpointer    ufo_buffer_get_device_array     (UfoBuffer      *buffer,
                                              gpointer        cmd_queue);
 gpointer    ufo_buffer_get_device_image     (UfoBuffer      *buffer,
