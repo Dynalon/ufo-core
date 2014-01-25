@@ -56,7 +56,7 @@ static void trace_stop (TraceHandle *th)
 {
 	gfloat now = g_timer_elapsed (global_clock, NULL);
 	gfloat delta = now - th->start;
-	g_debug ("%.4f    %.4f-%.4f    %s", delta, th->start, now, th->msg);
+	g_debug ("%.6f %s", delta, th->msg);
 	g_free (th->msg);
 	g_free (th);
 }

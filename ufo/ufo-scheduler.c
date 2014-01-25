@@ -524,14 +524,12 @@ static void run_remote_task_singlethreaded (TaskLocalData *tld)
             gpointer next_input = g_async_queue_pop (ufo_task_node_get_input_queue (self));
             // if (!get_inputs (tld, &next_input)) {
             if ((int *)next_input == UFO_END_OF_STREAM || ufo_buffer_get_fingerprint (next_input) == 0.0) {
-                g_debug ("BREAK: in_flight: %d, num_expected: %d", in_flight, num_expected);
                 active = FALSE;
                 break;
             } else {
                 num_expected++;
             }
             input = (UfoBuffer *) next_input;
-            g_debug ("REMOTE POP FP: %.6f", ufo_buffer_get_fingerprint (next_input));
 
             ufo_remote_node_send_inputs (remote, &input);
             ufo_buffer_release_to_pool (input);
@@ -539,10 +537,7 @@ static void run_remote_task_singlethreaded (TaskLocalData *tld)
         }
 
         if (!active) {
-
-            g_debug ("OUTBREAK: in_flight: %d, num_expected: %d", in_flight, num_expected);
             break;
-
         }
 
 
@@ -572,7 +567,6 @@ static void run_remote_task_singlethreaded (TaskLocalData *tld)
         in_flight--;
         push_to_least_utilized_queue (output, successor_queues);
     }
-    g_debug ("num_received: %d, num_expected: %d", num_received, num_expected);
     g_assert (num_received == num_expected);
     send_poisonpill_to_nodes (successor_queues);
     g_debug ("\tTASK EXITING: %s", ufo_task_node_get_unique_name (UFO_TASK_NODE (tld->task)));

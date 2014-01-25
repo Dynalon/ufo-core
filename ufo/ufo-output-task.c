@@ -122,10 +122,8 @@ ufo_output_task_get_output_buffer (UfoOutputTask *task)
         g_thread_yield ();
         buffer = g_async_queue_pop (task->priv->sorted_result_queue);
     }
-    g_debug ("popped in order buffer no. #%d", g_atomic_int_get (last_buffer_position));
     g_atomic_int_add (last_buffer_position, 1);
 
-    g_debug ("Getting output buffer FP[%d]: %.6f", *last_buffer_position - 1, ufo_buffer_get_fingerprint (buffer));
     return buffer;
 }
 
@@ -134,7 +132,6 @@ ufo_output_task_release_output_buffer (UfoOutputTask *task,
                                        UfoBuffer *buffer)
 {
     g_return_if_fail (UFO_IS_OUTPUT_TASK (task));
-    g_debug ("pushing back to input buffer: %.6f", ufo_buffer_get_fingerprint(buffer));
     g_async_queue_push (task->priv->in_queue, buffer);
 }
 
@@ -199,7 +196,6 @@ ufo_output_task_process (UfoCpuTask *task,
     UfoBuffer *result_output = ufo_buffer_dup (copy);
     ufo_buffer_copy (copy, result_output);
     ufo_buffer_set_id (result_output, buffer_count++);
-    g_debug ("the result copy has FP[%d]: %.6f", buffer_count - 1, ufo_buffer_get_fingerprint (result_output));
     g_async_queue_push_sorted (priv->sorted_result_queue,
                                result_output,
                                (GCompareDataFunc) compare_buffer_ids,

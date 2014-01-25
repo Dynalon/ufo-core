@@ -24,28 +24,6 @@
 typedef UfoMessengerIface UfoMessengerInterface;
 static GTimer *global_clock;
 
-typedef struct {
-        gfloat start;
-        gchar *msg;
-} TraceHandle;
-
-static TraceHandle * trace_start (const gchar *msg)
-{
-        TraceHandle *th = g_malloc (sizeof(TraceHandle));
-        th->msg = g_strdup (msg);
-        th->start = g_timer_elapsed (global_clock, NULL);
-        return th;
-}
-
-static void trace_stop (TraceHandle *th)
-{
-        gfloat now = g_timer_elapsed (global_clock, NULL);
-        gfloat delta = now - th->start;
-        g_debug ("%.4f    %.4f-%.4f    %s", delta, th->start, now, th->msg);
-        g_free (th->msg);
-        g_free (th);
-}
-
 void
 ufo_message_free (UfoMessage *msg)
 {
@@ -61,7 +39,6 @@ ufo_message_new (UfoMessageType type, guint64 data_size)
     if (global_clock == NULL)
         global_clock = g_timer_new ();
    
-    TraceHandle *th = trace_start ("UFO_MESSAGE_NEW"); 
     UfoMessage *msg = g_malloc (sizeof (UfoMessage));
     msg->type = type;
     msg->data_size = data_size;
@@ -69,7 +46,6 @@ ufo_message_new (UfoMessageType type, guint64 data_size)
         msg->data = NULL;
     else
         msg->data = g_malloc (data_size);
-    trace_stop (th);
     return msg;
 }
 

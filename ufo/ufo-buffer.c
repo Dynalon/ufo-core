@@ -24,6 +24,7 @@
 #include <CL/cl.h>
 #endif
 
+#include <stdio.h>
 #include <ufo/ufo-buffer.h>
 #include <ufo/ufo-buffer-pool.h>
 #include <ufo/ufo-resources.h>
@@ -34,7 +35,6 @@
  * @Title: UfoBuffer
  */
 
-static GTimer *global_clock;
 G_DEFINE_TYPE(UfoBuffer, ufo_buffer, G_TYPE_OBJECT)
 
 #define UFO_BUFFER_GET_PRIVATE(obj) (G_TYPE_INSTANCE_GET_PRIVATE((obj), UFO_TYPE_BUFFER, UfoBufferPrivate))
@@ -712,9 +712,7 @@ ufo_buffer_get_host_array (UfoBuffer *buffer, gpointer cmd_queue)
     update_last_queue (priv, cmd_queue);
 
     if (priv->host_array == NULL) {
-	gfloat start = g_timer_elapsed(global_clock, NULL);
         alloc_host_mem (priv);
-	g_debug ("%.6f alloc_host_mem ", g_timer_elapsed(global_clock, NULL) - start );
     }
     if (priv->location == UFO_LOCATION_DEVICE && priv->device_array)
         transfer_device_to_host (priv, priv, priv->last_queue);
@@ -949,7 +947,6 @@ ufo_buffer_class_init (UfoBufferClass *klass)
     GObjectClass *gobject_class = G_OBJECT_CLASS(klass);
     gobject_class->finalize = ufo_buffer_finalize;
 
-    global_clock = g_timer_new ();
     g_type_class_add_private(klass, sizeof(UfoBufferPrivate));
 }
 
@@ -987,6 +984,9 @@ ufo_buffer_param_set_default (GParamSpec *pspec, GValue *value)
 
 // for debugging
 gfloat ufo_buffer_get_fingerprint (UfoBuffer *buf) {
+#ifndef DEBUG
+    return 0.1234;
+#else
     gfloat *data = ufo_buffer_get_host_array (buf, NULL);
     gfloat val1 = 0.0f;
     val1 += (gfloat)  *(data+100);
@@ -1009,6 +1009,7 @@ gfloat ufo_buffer_get_fingerprint (UfoBuffer *buf) {
     val1 += (gfloat)  *(data+85800);
     val1 += (gfloat)  *(data+92800);
     return val1;
+#endif
 }
 
 
