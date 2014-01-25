@@ -84,8 +84,10 @@ gchar * ufo_message_type_to_char (UfoMessageType type)
             return g_strdup ("UFO_MESSAGE_REPLICATE_JSON");
         case UFO_MESSAGE_GET_STRUCTURE:
             return g_strdup ("UFO_MESSAGE_GET_STRUCTURE");
-        case UFO_MESSAGE_SEND_INPUTS:
-            return g_strdup ("UFO_MESSAGE_SEND_INPUTS");
+        case UFO_MESSAGE_SEND_INPUTS_REQUISITION:
+            return g_strdup ("UFO_MESSAGE_SEND_INPUTS_REQUISITION");
+        case UFO_MESSAGE_SEND_INPUTS_DATA:
+            return g_strdup ("UFO_MESSAGE_SEND_INPUTS_DATA");
         case UFO_MESSAGE_GET_REQUISITION:
             return g_strdup ("UFO_MESSAGE_GET_REQUISITION");
         case UFO_MESSAGE_GET_RESULT:

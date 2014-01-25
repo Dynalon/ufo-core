@@ -224,14 +224,14 @@ ufo_remote_node_send_inputs (UfoRemoteNode *node,
     // first, send the requisition of the input
     UfoRequisition requisition;
     ufo_buffer_get_requisition (inputs[0], &requisition);
-    UfoMessage *request = ufo_message_new (UFO_MESSAGE_SEND_INPUTS, 0);
+    UfoMessage *request = ufo_message_new (UFO_MESSAGE_SEND_INPUTS_REQUISITION, 0);
     request->data = &requisition;
     request->data_size = sizeof (UfoRequisition);
     ufo_messenger_send_blocking (priv->msger, request, NULL);
     g_free (request);
     
     // second, send the input payload
-    request = ufo_message_new (UFO_MESSAGE_SEND_INPUTS, 0);
+    request = ufo_message_new (UFO_MESSAGE_SEND_INPUTS_DATA, 0);
     request->data_size = ufo_buffer_get_size (inputs[0]);
     request->data = ufo_buffer_get_host_array (inputs[0], NULL);
     ufo_messenger_send_blocking (priv->msger, request, NULL);

@@ -477,7 +477,7 @@ handle_incoming (UfoDaemon *daemon, UfoMessage *msg)
         case UFO_MESSAGE_GET_STRUCTURE:
             handle_get_structure (daemon);
             break;
-        case UFO_MESSAGE_SEND_INPUTS:
+        case UFO_MESSAGE_SEND_INPUTS_REQUISITION:
             handle_send_inputs (daemon, msg);
             break;
         case UFO_MESSAGE_GET_REQUISITION:
