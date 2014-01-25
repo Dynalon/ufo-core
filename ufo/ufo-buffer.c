@@ -291,7 +291,7 @@ void ufo_buffer_set_host_array (UfoBuffer *buffer, gpointer data)
         g_free (priv->host_array);
     }
     priv->host_array = (gfloat *) data;
-    priv->location = UFO_LOCATION_HOST;
+    //priv->location = UFO_LOCATION_HOST;
 }
 
 void
