@@ -41,7 +41,7 @@ struct _UfoRemoteNodePrivate {
 static GTimer *global_clock;
 
 typedef struct {
-	gdouble start;
+	gfloat start;
 	gchar *msg;
 } TraceHandle;
 
@@ -54,9 +54,9 @@ static TraceHandle * trace_start (const gchar *msg)
 }
 static void trace_stop (TraceHandle *th)
 {
-	gdouble now = g_timer_elapsed (global_clock, NULL);
-	gdouble delta = now - th->start;
-	g_debug ("%.4f\t%.4f-%.4f\t%s", delta, th->start, now, th->msg);
+	gfloat now = g_timer_elapsed (global_clock, NULL);
+	gfloat delta = now - th->start;
+	g_debug ("%.4f    %.4f-%.4f    %s", delta, th->start, now, th->msg);
 	g_free (th->msg);
 	g_free (th);
 }
@@ -232,7 +232,6 @@ ufo_remote_node_send_inputs (UfoRemoteNode *node,
     // determine our total message size
     guint64 size = sizeof (struct _Header);
 
-    TraceHandle *th = trace_start ("COPY_SEND_INPUT_BUFFER");
     for (guint i = 0; i < priv->n_inputs; i++) {
         guint64 buffer_size = ufo_buffer_get_size (inputs[i]);
         size += buffer_size;
@@ -249,10 +248,14 @@ ufo_remote_node_send_inputs (UfoRemoteNode *node,
 
         memcpy (base, header, sizeof (struct _Header));
         base += sizeof (struct _Header);
-        memcpy (base, ufo_buffer_get_host_array (inputs[i], NULL), header->buffer_size);
+    	TraceHandle *th = trace_start ("GET_HOSTARRAY_SEND_INPUT_BUFFER");
+        gpointer host_array = ufo_buffer_get_host_array (inputs[i], NULL);
+    	trace_stop (th);
+    	th = trace_start ("MEMCPY_SEND_INPUT_BUFFER");
+        memcpy (base, host_array, header->buffer_size);
+    	trace_stop (th);
         base += header->buffer_size;
     }
-    trace_stop (th);
     request = ufo_message_new (UFO_MESSAGE_SEND_INPUTS, size);
     g_free (request->data);
     request->data = buffer;

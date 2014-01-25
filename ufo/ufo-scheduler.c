@@ -46,8 +46,8 @@
 
 // best result with 10 for zmq ipc:// transport
 #define MAX_REMOTE_IN_FLIGHT 100
-#define MAX_POOL_LEN 1000
-#define POOL_SPARE 1000
+#define MAX_POOL_LEN 20
+#define POOL_SPARE 20
 static gpointer static_context;
 static volatile gint *send_pending;
 static GMutex *send_pending_lock;

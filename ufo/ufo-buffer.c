@@ -34,6 +34,7 @@
  * @Title: UfoBuffer
  */
 
+static GTimer *global_clock;
 G_DEFINE_TYPE(UfoBuffer, ufo_buffer, G_TYPE_OBJECT)
 
 #define UFO_BUFFER_GET_PRIVATE(obj) (G_TYPE_INSTANCE_GET_PRIVATE((obj), UFO_TYPE_BUFFER, UfoBufferPrivate))
@@ -699,9 +700,11 @@ ufo_buffer_get_host_array (UfoBuffer *buffer, gpointer cmd_queue)
 
     update_last_queue (priv, cmd_queue);
 
-    if (priv->host_array == NULL)
+    if (priv->host_array == NULL) {
+	gfloat start = g_timer_elapsed(global_clock, NULL);
         alloc_host_mem (priv);
-
+	g_debug ("%.6f alloc_host_mem ", g_timer_elapsed(global_clock, NULL) - start );
+    }
     if (priv->location == UFO_LOCATION_DEVICE && priv->device_array)
         transfer_device_to_host (priv, priv, priv->last_queue);
 
@@ -935,6 +938,7 @@ ufo_buffer_class_init (UfoBufferClass *klass)
     GObjectClass *gobject_class = G_OBJECT_CLASS(klass);
     gobject_class->finalize = ufo_buffer_finalize;
 
+    global_clock = g_timer_new ();
     g_type_class_add_private(klass, sizeof(UfoBufferPrivate));
 }
 
