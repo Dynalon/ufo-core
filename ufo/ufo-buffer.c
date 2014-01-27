@@ -65,6 +65,7 @@ struct _UfoBufferPrivate {
     UfoMemLocation      last_location;
     UfoBufferPool       *origin;
     guint                id;
+    GMutex              *mutex;
 };
 
 static void
@@ -234,6 +235,7 @@ ufo_buffer_new (UfoRequisition *requisition,
 
     copy_requisition (requisition, &priv->requisition);
     priv->size = compute_required_size (requisition);
+    priv->mutex = g_mutex_new ();
 
     return buffer;
 }
@@ -275,7 +277,6 @@ ufo_buffer_release_to_pool (UfoBuffer *buffer)
     }
     ufo_buffer_pool_release (priv->origin, buffer);
 }
-    
 
 guint
 ufo_buffer_get_id (UfoBuffer *buffer)
@@ -324,9 +325,11 @@ transfer_host_to_host (UfoBufferPrivate *src_priv,
                        UfoBufferPrivate *dst_priv,
                        cl_command_queue queue)
 {
+    g_debug ("start memmove");
     g_memmove (dst_priv->host_array,
                src_priv->host_array,
                src_priv->size);
+    g_debug ("stop memmove");
 }
 
 static void
@@ -684,11 +687,13 @@ update_location (UfoBufferPrivate *priv,
 void ufo_buffer_set_host_array (UfoBuffer *buffer, gpointer data)
 {
     UfoBufferPrivate *priv = UFO_BUFFER_GET_PRIVATE (buffer);
+    g_mutex_lock (priv->mutex);
     if (priv->host_array != NULL) {
         g_free (priv->host_array);
     }
     priv->host_array = (gfloat *) data;
     update_location (priv, UFO_LOCATION_HOST);
+    g_mutex_unlock (priv->mutex);
 }
 
 
@@ -705,9 +710,10 @@ gfloat *
 ufo_buffer_get_host_array (UfoBuffer *buffer, gpointer cmd_queue)
 {
     UfoBufferPrivate *priv;
-
     g_return_val_if_fail (UFO_IS_BUFFER (buffer), NULL);
+
     priv = buffer->priv;
+    g_mutex_lock (priv->mutex);
 
     update_last_queue (priv, cmd_queue);
 
@@ -721,7 +727,7 @@ ufo_buffer_get_host_array (UfoBuffer *buffer, gpointer cmd_queue)
         transfer_image_to_host (priv, priv, priv->last_queue);
 
     update_location (priv, UFO_LOCATION_HOST);
-
+    g_mutex_unlock (priv->mutex);
     return priv->host_array;
 }
 
