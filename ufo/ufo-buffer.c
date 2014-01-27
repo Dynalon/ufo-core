@@ -325,11 +325,9 @@ transfer_host_to_host (UfoBufferPrivate *src_priv,
                        UfoBufferPrivate *dst_priv,
                        cl_command_queue queue)
 {
-    g_debug ("start memmove");
     g_memmove (dst_priv->host_array,
                src_priv->host_array,
                src_priv->size);
-    g_debug ("stop memmove");
 }
 
 static void
@@ -517,8 +515,11 @@ ufo_buffer_copy (UfoBuffer *src, UfoBuffer *dst)
     typedef void (*TransferFunc) (UfoBufferPrivate *, UfoBufferPrivate *, cl_command_queue);
     typedef void (*AllocFunc) (UfoBufferPrivate *priv);
 
-    UfoBufferPrivate *spriv;
-    UfoBufferPrivate *dpriv;
+    g_return_if_fail (UFO_IS_BUFFER (src) && UFO_IS_BUFFER (dst));
+    g_return_if_fail (src->priv->size == dst->priv->size);
+    
+    UfoBufferPrivate *spriv = src->priv;
+    UfoBufferPrivate *dpriv = dst->priv;
     cl_command_queue queue;
 
     TransferFunc transfer[3][3] = {
@@ -529,11 +530,8 @@ ufo_buffer_copy (UfoBuffer *src, UfoBuffer *dst)
 
     AllocFunc alloc[3] = { alloc_host_mem, alloc_device_array, alloc_device_image };
 
-    g_return_if_fail (UFO_IS_BUFFER (src) && UFO_IS_BUFFER (dst));
-    g_return_if_fail (src->priv->size == dst->priv->size);
-
-    spriv = src->priv;
-    dpriv = dst->priv;
+    g_mutex_lock (spriv->mutex);
+    g_mutex_lock (dpriv->mutex);
     queue = spriv->last_queue != NULL ? spriv->last_queue : dpriv->last_queue;
 
     if (spriv->location == UFO_LOCATION_INVALID) {
@@ -548,6 +546,8 @@ ufo_buffer_copy (UfoBuffer *src, UfoBuffer *dst)
 
     transfer[spriv->location][dpriv->location](spriv, dpriv, queue);
     dpriv->last_queue = queue;
+    g_mutex_unlock (dpriv->mutex);
+    g_mutex_unlock (spriv->mutex);
 }
 
 /**
