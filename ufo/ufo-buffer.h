@@ -145,6 +145,7 @@ void        ufo_buffer_convert_from_data    (UfoBuffer      *buffer,
                                              gconstpointer   data,
                                              UfoBufferDepth  depth);
 gfloat      ufo_buffer_get_fingerprint (UfoBuffer *buf);
+gfloat      ufo_buffer_get_fingerprint_from_data (gpointer data);
 guint       ufo_buffer_get_id (UfoBuffer *buf);
 void        ufo_buffer_set_id (UfoBuffer *buf, guint id);
 GType       ufo_buffer_get_type             (void);
