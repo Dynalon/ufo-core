@@ -49,9 +49,9 @@
 #define MAX_POOL_LEN 20
 #define POOL_SPARE 20
 static gpointer static_context;
-static volatile gint *send_pending;
-static GMutex *send_pending_lock;
+static volatile gint *remote_pending;
 static gint n_remotes;
+static gdouble start_of_operation;
 
 /**
  * SECTION:ufo-scheduler
@@ -492,6 +492,38 @@ static void run_remote_task_multithreaded (TaskLocalData *tld)
 
     send_poisonpill_to_nodes (tld->successor_queues);
 }
+
+static void wait_until_remotes_ready (UfoRemoteNode *remote)
+{
+    // barrier for all remote tasks - we want to wait until all remotes are
+    // set up completely before we measure the time
+    gint my_node_index = g_atomic_int_add (remote_pending, 1);
+    UfoRequisition dummy_requisition;
+    dummy_requisition.n_dims = 2;
+    dummy_requisition.dims[0] = 2048;
+    dummy_requisition.dims[1] = 1000;
+    UfoBuffer *dummy_input = ufo_buffer_new (&dummy_requisition, NULL, NULL);
+    while (g_atomic_int_get (remote_pending) != n_remotes)
+    {
+        g_debug ("yielding");
+        g_thread_yield ();
+    }
+    ufo_remote_node_send_inputs (remote, &dummy_input);
+    ufo_remote_node_get_requisition (remote, &dummy_requisition);
+    UfoBuffer *dummy_output = ufo_buffer_new (&dummy_requisition, NULL, NULL);
+    ufo_remote_node_get_result (remote, dummy_output);
+
+    g_object_unref (dummy_input);
+    g_object_unref (dummy_output);
+
+    if (my_node_index == 0)
+    {
+        g_atomic_int_set (remote_pending, 0);
+        start_of_operation = g_timer_elapsed (global_clock, NULL);
+        g_debug ("Start of operation at %.4f", start_of_operation);
+    }
+}
+
 static void run_remote_task_singlethreaded (TaskLocalData *tld)
 {
     UfoBuffer *input = NULL;
@@ -517,6 +549,9 @@ static void run_remote_task_singlethreaded (TaskLocalData *tld)
     gboolean got_requisition = FALSE;
     gint num_received = 0;
     gint num_expected = 0;
+
+    // barrier that ensures all nodes are set up
+    wait_until_remotes_ready (remote);
 
     while (active) {
         while (in_flight < max_in_flight) {
@@ -568,6 +603,17 @@ static void run_remote_task_singlethreaded (TaskLocalData *tld)
         push_to_least_utilized_queue (output, successor_queues);
     }
     g_assert (num_received == num_expected);
+
+    // another barrier to wait for all remote tasks and output runtime info
+    gint index = g_atomic_int_add (remote_pending, 1);
+    while (!g_atomic_int_get (remote_pending) == n_remotes)
+        g_thread_yield ();
+
+    if (index == 0) {
+        gdouble took = g_timer_elapsed (global_clock, NULL) - start_of_operation;
+        g_debug ("Remode nodes time to completion: %.4f", took);
+    }
+
     send_poisonpill_to_nodes (successor_queues);
     g_debug ("\tTASK EXITING: %s", ufo_task_node_get_unique_name (UFO_TASK_NODE (tld->task)));
 }
@@ -1301,9 +1347,8 @@ ufo_scheduler_run (UfoScheduler *scheduler,
         return;
 
     GList *remote_nodes = ufo_graph_get_nodes_filtered (UFO_GRAPH(task_graph), is_remote_node, NULL);
-    send_pending_lock = g_mutex_new ();
-    send_pending = g_malloc (sizeof (gint));
-    g_atomic_int_set (send_pending, 0); 
+    remote_pending = g_malloc (sizeof (gint));
+    g_atomic_int_set (remote_pending, 0);
     n_remotes = 0;
     if (remote_nodes == NULL)
         has_remote_nodes = FALSE;
