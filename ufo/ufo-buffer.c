@@ -990,9 +990,7 @@ ufo_buffer_param_set_default (GParamSpec *pspec, GValue *value)
 
 // for debugging
 gfloat ufo_buffer_get_fingerprint (UfoBuffer *buf) {
-#ifndef DEBUG
     return 0.1234;
-#else
     gfloat *data = ufo_buffer_get_host_array (buf, NULL);
     return ufo_buffer_get_fingerprint_from_data (data);
 }
@@ -1022,7 +1020,6 @@ gfloat ufo_buffer_get_fingerprint_from_data (gpointer p)
     val1 += (gfloat)  *(data+85800);
     val1 += (gfloat)  *(data+92800);
     return val1;
-#endif
 }
 
 

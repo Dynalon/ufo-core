@@ -21,6 +21,7 @@
 #include <mpi.h>
 #include <string.h>
 #include <unistd.h>
+#include <stdio.h>
 
 static void ufo_messenger_interface_init (UfoMessengerIface *iface);
 
@@ -61,7 +62,9 @@ typedef struct _DataFrame {
  * the Send/Recv. If global_mutex is NULL, we don't synchronize (i.e. when
  * calling from ufo-daemon since it only holds a single messaging thread).
  * If MPI_THREADS_MULTIPLE is supported, we wouldn't need a global lock - however,
- * on most InfiniBand systems, this is not the case.
+ * on most InfiniBand systems, this is not the case. _MULTIPLE is also buggy and
+ * slow on many MPI implementations, so we are better of with _SERIALIZED and 
+ * lock on our own.
  */
 UfoMpiMessenger *
 ufo_mpi_messenger_new ()
@@ -83,12 +86,13 @@ ufo_mpi_messenger_new ()
         priv->free_mutex = TRUE;
     } else if (provided_thread_level == MPI_THREAD_SERIALIZED) {
         g_message ("The MPI implementation does not support MPI_THREAD_MULTIPLE");
-        g_message ("Using global lock for MPI communication, performance may be degraded.");
+        g_message ("Using global lock for MPI communication.");
         static GStaticMutex static_mutex = G_STATIC_MUTEX_INIT;
         priv->mutex = g_static_mutex_get_mutex (&static_mutex);
     } else {
-        g_critical ("Required thread level MPI_THREAD_SERIALIZED not available in used MPI implementation");
+       g_critical ("No Threading support in MPI implemenation found. I need at least MPI_THREAD_SERIALIZED!");
     }
+ 
 
     priv->profiler = ufo_profiler_new ();
 

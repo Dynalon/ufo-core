@@ -45,7 +45,7 @@
 #include <ufo/ufo-buffer-pool.h>
 
 // best result with 10 for zmq ipc:// transport
-#define MAX_REMOTE_IN_FLIGHT 100
+#define MAX_REMOTE_IN_FLIGHT 21
 #define MAX_POOL_LEN 20
 #define POOL_SPARE 20
 static gpointer static_context;
@@ -508,6 +508,8 @@ static void wait_until_remotes_ready (UfoRemoteNode *remote)
         g_debug ("yielding");
         g_thread_yield ();
     }
+    sleep(5);
+
     ufo_remote_node_send_inputs (remote, &dummy_input);
     ufo_remote_node_get_requisition (remote, &dummy_requisition);
     UfoBuffer *dummy_output = ufo_buffer_new (&dummy_requisition, NULL, NULL);
@@ -611,7 +613,11 @@ static void run_remote_task_singlethreaded (TaskLocalData *tld)
 
     if (index == 0) {
         gdouble took = g_timer_elapsed (global_clock, NULL) - start_of_operation;
-        g_debug ("Remode nodes time to completion: %.4f", took);
+        g_message ("==== REMOTE NODE TIME TO COMPLETION: %.4f", took);
+        // write this to trace-runtime
+        FILE *fp = fopen ("trace-runtime", "w");
+        fprintf (fp, "%.6f\n", took);
+        fclose (fp);
     }
 
     send_poisonpill_to_nodes (successor_queues);

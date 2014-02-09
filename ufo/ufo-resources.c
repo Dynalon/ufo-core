@@ -693,6 +693,7 @@ ufo_resources_get_kernel (UfoResources *resources,
     if (path == NULL) {
         g_set_error (error, UFO_RESOURCES_ERROR, UFO_RESOURCES_ERROR_LOAD_PROGRAM,
                      "Could not find `%s'. Maybe you forgot to pass a configuration?", filename);
+	g_critical (" ERROR WITH KERNEL FILE ");
         return NULL;
     }
 

@@ -194,7 +194,7 @@ static void write_events_csv (UfoMessenger *msger)
         filename = g_strdup_printf("%s-%s-%s-%p.csv", filename_base, role, p->addr, (void*) g_thread_self());
     else
         filename = g_strdup_printf("%s-%s-%p.csv", filename_base, role, (void*) g_thread_self());
-
+    
     FILE *fp = fopen (filename, "w");
 
     gsize total_data = 0;

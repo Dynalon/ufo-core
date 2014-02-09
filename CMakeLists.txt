@@ -129,7 +129,7 @@ add_definitions(-DG_LOG_DOMAIN=\"Ufo\")
 #}}}
 #{{{ Subdirectories
 add_subdirectory(ufo)
-add_subdirectory(docs)
+#add_subdirectory(docs)
 add_subdirectory(tools)
 
 if (WITH_TESTS)
