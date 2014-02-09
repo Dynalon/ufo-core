@@ -95,11 +95,14 @@ execute_json (const gchar *filename,
 }
 
 #ifdef MPI
+static GStaticMutex static_mutex = G_STATIC_MUTEX_INIT;
 
 static void
 mpi_terminate_processes (gint global_size)
 {
+    GMutex *mutex = g_static_mutex_get_mutex (&static_mutex);
     for (int i = 1; i < global_size; i++) {
+        g_mutex_lock (mutex);
         gchar *addr = g_strdup_printf ("%d", i);
         UfoMessage *poisonpill = ufo_message_new (UFO_MESSAGE_TERMINATE, 0);
         UfoMessenger *msger = UFO_MESSENGER (ufo_mpi_messenger_new ());
@@ -108,6 +111,7 @@ mpi_terminate_processes (gint global_size)
         ufo_messenger_send_blocking (msger, poisonpill, NULL);
         ufo_message_free (poisonpill);
         ufo_messenger_disconnect (msger);
+        g_mutex_unlock (mutex);
     }
 }
 

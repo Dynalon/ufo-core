@@ -45,9 +45,10 @@
 #include <ufo/ufo-buffer-pool.h>
 
 // best result with 10 for zmq ipc:// transport
-#define MAX_REMOTE_IN_FLIGHT 21
+#define MAX_REMOTE_IN_FLIGHT 10
 #define MAX_POOL_LEN 20
 #define POOL_SPARE 20
+static GStaticMutex static_mutex = G_STATIC_MUTEX_INIT;
 static gpointer static_context;
 static volatile gint *remote_pending;
 static gint n_remotes;
@@ -526,6 +527,18 @@ static void wait_until_remotes_ready (UfoRemoteNode *remote)
     }
 }
 
+static gint remote_barrier (void)
+{
+    // another barrier to wait for all remote tasks and output runtime info
+    gint wait1 = g_atomic_int_add (remote_pending, 1);
+    while (g_atomic_int_get (remote_pending) % n_remotes != 0) {
+        g_thread_yield ();
+    }
+
+    return wait1 % n_remotes;
+}
+
+static gboolean log_written = FALSE;
 static void run_remote_task_singlethreaded (TaskLocalData *tld)
 {
     UfoBuffer *input = NULL;
@@ -555,7 +568,9 @@ static void run_remote_task_singlethreaded (TaskLocalData *tld)
     // barrier that ensures all nodes are set up
     wait_until_remotes_ready (remote);
 
+    GMutex *mutex = g_static_mutex_get_mutex (&static_mutex);
     while (active) {
+        g_mutex_lock (mutex);
         while (in_flight < max_in_flight) {
             // TODO this pop periodically returns the same images
             gpointer next_input = g_async_queue_pop (ufo_task_node_get_input_queue (self));
@@ -572,19 +587,27 @@ static void run_remote_task_singlethreaded (TaskLocalData *tld)
             ufo_buffer_release_to_pool (input);
             in_flight++;
         }
+        g_mutex_unlock (mutex);
+    
+        // another barrier to wait for all remote tasks and output runtime info
+        remote_barrier ();
 
         if (!active) {
             break;
         }
 
-
         while (in_flight > 0) {
-            if (G_UNLIKELY (!got_requisition || TRUE)) {
+            if (G_UNLIKELY (!got_requisition || FALSE)) {
+                g_mutex_lock (mutex);
                 ufo_remote_node_get_requisition (remote, &requisition);
                 got_requisition = TRUE;
+                g_mutex_unlock (mutex);
             }
             output = ufo_buffer_pool_acquire (obp, &requisition);
+            g_mutex_lock (mutex);
             ufo_remote_node_get_result (remote, output);
+            g_mutex_unlock (mutex);
+	    remote_barrier ();
             num_received++;
             in_flight--;
             push_to_least_utilized_queue (output, successor_queues);
@@ -593,25 +616,27 @@ static void run_remote_task_singlethreaded (TaskLocalData *tld)
     // HACK should be 0 but we have a race then
     g_debug ("start to collect outstanding buffers");
     while (in_flight > 0) {
-        if (G_UNLIKELY (!got_requisition || TRUE)) {
+        if (G_UNLIKELY (!got_requisition || FALSE)) {
+            g_mutex_lock (mutex);
             ufo_remote_node_get_requisition (remote, &requisition);
+            g_mutex_unlock (mutex);
             got_requisition = TRUE;
         }
         //ufo_remote_node_get_requisition (remote, &requisition);
         output = ufo_buffer_pool_acquire (obp, &requisition);
+        g_mutex_lock (mutex);
         ufo_remote_node_get_result (remote, output);
+        g_mutex_unlock (mutex);
         num_received++;
         in_flight--;
         push_to_least_utilized_queue (output, successor_queues);
     }
     g_assert (num_received == num_expected);
 
-    // another barrier to wait for all remote tasks and output runtime info
-    gint index = g_atomic_int_add (remote_pending, 1);
-    while (!g_atomic_int_get (remote_pending) == n_remotes)
-        g_thread_yield ();
-
-    if (index == 0) {
+    remote_barrier ();
+    g_mutex_lock (mutex);
+    if (log_written == FALSE) {
+        log_written = TRUE;
         gdouble took = g_timer_elapsed (global_clock, NULL) - start_of_operation;
         g_message ("==== REMOTE NODE TIME TO COMPLETION: %.4f", took);
         // write this to trace-runtime
@@ -619,6 +644,7 @@ static void run_remote_task_singlethreaded (TaskLocalData *tld)
         fprintf (fp, "%.6f\n", took);
         fclose (fp);
     }
+    g_mutex_unlock (mutex);
 
     send_poisonpill_to_nodes (successor_queues);
     g_debug ("\tTASK EXITING: %s", ufo_task_node_get_unique_name (UFO_TASK_NODE (tld->task)));

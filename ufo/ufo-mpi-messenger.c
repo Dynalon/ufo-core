@@ -79,16 +79,12 @@ ufo_mpi_messenger_new ()
     gint provided_thread_level;
     MPI_Query_thread (&provided_thread_level);
     if (provided_thread_level >= MPI_THREAD_MULTIPLE) {
-        /* don't use global mutex, we rely on the MPI implementation to be thread
-         * safe. TODO: don't even use a per-thread lock in this case.
-         */
         priv->mutex = g_mutex_new ();
         priv->free_mutex = TRUE;
     } else if (provided_thread_level == MPI_THREAD_SERIALIZED) {
-        g_message ("The MPI implementation does not support MPI_THREAD_MULTIPLE");
-        g_message ("Using global lock for MPI communication.");
         static GStaticMutex static_mutex = G_STATIC_MUTEX_INIT;
-        priv->mutex = g_static_mutex_get_mutex (&static_mutex);
+        /* FOR SAFE LOCKING, USE STATIC LOCK INSTEAD IF CRASHES OCCUR */
+        priv->mutex = g_mutex_new ();
     } else {
        g_critical ("No Threading support in MPI implemenation found. I need at least MPI_THREAD_SERIALIZED!");
     }
@@ -133,7 +129,6 @@ ufo_mpi_messenger_send_blocking (UfoMessenger *msger,
 {
     UfoMpiMessengerPrivate *priv = UFO_MPI_MESSENGER_GET_PRIVATE (msger);
 
-    g_mutex_lock (priv->mutex);
     g_assert (priv->connected == TRUE);
 
     // we send in two phaess: first send the data frame of fixed size
@@ -193,7 +188,6 @@ ufo_mpi_messenger_send_blocking (UfoMessenger *msger,
     goto finalize;
 
     finalize:
-        g_mutex_unlock (priv->mutex);
         return response;
 }
 
@@ -203,7 +197,6 @@ ufo_mpi_messenger_recv_blocking (UfoMessenger *msger,
 {
     UfoMpiMessengerPrivate *priv = UFO_MPI_MESSENGER_GET_PRIVATE (msger);
 
-    g_mutex_lock (priv->mutex);
     g_assert (priv->connected == TRUE);
 
     UfoMessage *response = g_malloc (sizeof (UfoMessage));
@@ -233,7 +226,6 @@ ufo_mpi_messenger_recv_blocking (UfoMessenger *msger,
         // g_debug ("[%d:%d] RECV payload received from %d, size: %lu", priv->pid, priv->own_rank, priv->remote_rank, frame->data_size);
         response->data = buff;
     }
-    g_mutex_unlock (priv->mutex);
     return response;
 }
 
