@@ -135,7 +135,7 @@ configure_file(${CMAKE_CURRENT_SOURCE_DIR}/config.h.in
 #}}}
 #{{{ Subdirectories
 add_subdirectory(ufo)
-#add_subdirectory(docs)
+add_subdirectory(docs)
 add_subdirectory(tools)
 
 if (WITH_TESTS)

@@ -52,7 +52,7 @@ struct _UfoMpiMessengerPrivate {
 typedef struct _DataFrame {
     UfoMessageType type;
     guint64 data_size;
-    // variable length data field
+    // variable length data field, goes to the stack
     char data[];
 } DataFrame;
 
@@ -129,16 +129,11 @@ ufo_mpi_messenger_send_blocking (UfoMessenger *msger,
     request_frame->data_size = request_msg->data_size;
 
     // send preflight
-    // TMERGER TODO traces compilte conditional
-    NetworkEvent *ev = start_trace_event (msger, NULL, "MPI_SEND_PREFLIGHT");
     MPI_Ssend (request_frame, sizeof (DataFrame), MPI_CHAR, priv->remote_rank, 0, MPI_COMM_WORLD);
-    stop_trace_event (msger, NULL, ev);
 
     // send payload
     if (request_msg->data_size > 0) {
-        ev = start_trace_event (msger, NULL, "MPI_SEND_PAYLOAD_SEND");
         int err = MPI_Ssend (request_msg->data, request_msg->data_size, MPI_CHAR, priv->remote_rank, 0, MPI_COMM_WORLD);
-        stop_trace_event (msger, NULL, ev);
         if (err != MPI_SUCCESS) {
             g_critical ("error on MPI_Ssend: %d", err);
             goto finalize;
@@ -153,24 +148,20 @@ ufo_mpi_messenger_send_blocking (UfoMessenger *msger,
         goto finalize;
     }
 
-    // receive the response
     MPI_Status status;
 
-    // reuse the memory buffer
-    // TMERGE TODO trace conditional
+    // reuse the buffer
     DataFrame *response_frame = request_frame;
-    ev = start_trace_event (msger, NULL, "MPI_RECV_PREFLIGHT_SEND");
+    // receive the response preflight
     MPI_Recv (response_frame, sizeof (DataFrame), MPI_CHAR, priv->remote_rank, 0, MPI_COMM_WORLD, &status);
-    stop_trace_event (msger, NULL, ev);
 
     response->type = response_frame->type;
     response->data_size = response_frame->data_size;
 
+    // receive the response payload (if any)
     if (response_frame->data_size > 0) {
         gpointer buff = g_malloc (response_frame->data_size);
-        ev = start_trace_event (msger, NULL, "MPI_RECV_PAYLOAD_SEND");
         MPI_Recv (buff, response_frame->data_size, MPI_CHAR, priv->remote_rank, 0, MPI_COMM_WORLD, &status);
-        stop_trace_event (msger, NULL, ev);
         response->data = buff;
     }
 
@@ -195,10 +186,7 @@ ufo_mpi_messenger_recv_blocking (UfoMessenger *msger,
     DataFrame *frame = g_malloc (sizeof (DataFrame));
     MPI_Status status;
 
-    // TMERGE TODO conditional compile
-    NetworkEvent *ev = start_trace_event (msger, NULL, "MPI_RECV_PREFLIGHT_RECV");
     int ret = MPI_Recv (frame, sizeof (DataFrame), MPI_CHAR, priv->remote_rank, 0, MPI_COMM_WORLD, &status);
-    stop_trace_event (msger, NULL, ev);
 
     if (ret != MPI_SUCCESS)
         g_critical ("error on recv: %d", ret);
@@ -208,9 +196,7 @@ ufo_mpi_messenger_recv_blocking (UfoMessenger *msger,
 
     if (frame->data_size > 0) {
         gpointer buff = g_malloc (frame->data_size);
-        ev = start_trace_event (msger, NULL, "MPI_RECV_PAYLOAD_RECV");
         MPI_Recv (buff, frame->data_size, MPI_CHAR, priv->remote_rank, 0, MPI_COMM_WORLD, &status);
-        stop_trace_event (msger, NULL, ev);
         response->data = buff;
     }
     return response;
@@ -253,8 +239,7 @@ ufo_mpi_messenger_finalize (GObject *object)
 {
     UfoMpiMessengerPrivate *priv = UFO_MPI_MESSENGER_GET_PRIVATE (object);
 
-    if (priv->free_mutex)
-        g_mutex_free (priv->mutex);
+    g_mutex_free (priv->mutex);
 }
 
 static void

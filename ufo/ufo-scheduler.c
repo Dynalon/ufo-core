@@ -44,14 +44,14 @@
 #include <ufo/ufo-task-iface.h>
 #include <ufo/ufo-buffer-pool.h>
 
-// best result with 10 for zmq ipc:// transport
 #define MAX_REMOTE_IN_FLIGHT 10
 #define MAX_POOL_LEN 20
 #define POOL_SPARE 20
+
 static GStaticMutex static_mutex = G_STATIC_MUTEX_INIT;
 static gpointer static_context;
-static volatile gint *remote_pending;
 static gint n_remotes;
+static volatile gint *remote_pending;
 static gdouble start_of_operation;
 
 /**
@@ -73,7 +73,6 @@ G_DEFINE_TYPE_WITH_CODE (UfoScheduler, ufo_scheduler, G_TYPE_OBJECT,
 #define UFO_SCHEDULER_GET_PRIVATE(obj) (G_TYPE_INSTANCE_GET_PRIVATE((obj), UFO_TYPE_SCHEDULER, UfoSchedulerPrivate))
 
 static GTimer *global_clock;
-static gboolean has_remote_nodes = FALSE;
 
 typedef struct {
     gpointer         context;
@@ -316,41 +315,6 @@ push_to_next_queue (gpointer element, GList *queues)
     next_queue_index++;
 }
 
-
-static void
-wait_until_remotes_ready (UfoRemoteNode *remote)
-{
-    // barrier for all remote tasks - we want to wait until all remotes are
-    // set up completely before we measure the time
-    gint my_node_index = g_atomic_int_add (remote_pending, 1);
-    UfoRequisition dummy_requisition;
-    dummy_requisition.n_dims = 2;
-    //TMERGE TODO sichergehen dass dann auch andere requisitions funzen
-    dummy_requisition.dims[0] = 2048;
-    dummy_requisition.dims[1] = 1000;
-    UfoBuffer *dummy_input = ufo_buffer_new (&dummy_requisition, NULL, NULL);
-    while (g_atomic_int_get (remote_pending) != n_remotes)
-    {
-        g_thread_yield ();
-    }
-    sleep(5);
-
-    ufo_remote_node_send_inputs (remote, &dummy_input);
-    ufo_remote_node_get_requisition (remote, &dummy_requisition);
-    UfoBuffer *dummy_output = ufo_buffer_new (&dummy_requisition, NULL, NULL);
-    ufo_remote_node_get_result (remote, dummy_output);
-
-    g_object_unref (dummy_input);
-    g_object_unref (dummy_output);
-
-    if (my_node_index == 0)
-    {
-        g_atomic_int_set (remote_pending, 0);
-        start_of_operation = g_timer_elapsed (global_clock, NULL);
-        g_debug ("Start of operation at %.4f", start_of_operation);
-    }
-}
-
 static gint remote_barrier (void)
 {
     // another barrier to wait for all remote tasks and output runtime info
@@ -363,7 +327,6 @@ static gint remote_barrier (void)
     return wait1 % n_remotes;
 }
 
-static gboolean log_written = FALSE;
 static void run_remote_task (TaskLocalData *tld)
 {
     UfoBuffer *input = NULL;
@@ -390,16 +353,11 @@ static void run_remote_task (TaskLocalData *tld)
     gint num_received = 0;
     gint num_expected = 0;
 
-    // barrier that ensures all nodes are set up
-    wait_until_remotes_ready (remote);
-
     GMutex *mutex = g_static_mutex_get_mutex (&static_mutex);
     while (active) {
         g_mutex_lock (mutex);
         while (in_flight < max_in_flight) {
-            // TODO this pop periodically returns the same images
             gpointer next_input = g_async_queue_pop (ufo_task_node_get_input_queue (self));
-            // if (!get_inputs (tld, &next_input)) {
             if ((int *)next_input == UFO_END_OF_STREAM || ufo_buffer_get_fingerprint (next_input) == 0.0) {
                 active = FALSE;
                 break;
@@ -414,7 +372,7 @@ static void run_remote_task (TaskLocalData *tld)
         }
         g_mutex_unlock (mutex);
 
-        // another barrier to wait for all remote tasks and output runtime info
+        // wait until all remotes are filled with buffers
         remote_barrier ();
 
         if (!active) {
@@ -422,7 +380,9 @@ static void run_remote_task (TaskLocalData *tld)
         }
 
         while (in_flight > 0) {
-            if (G_UNLIKELY (!got_requisition || FALSE)) {
+            // we only receive requisition once to save network calls
+            // this assumes the requisition remains constant
+            if (G_UNLIKELY (!got_requisition)) {
                 g_mutex_lock (mutex);
                 ufo_remote_node_get_requisition (remote, &requisition);
                 got_requisition = TRUE;
@@ -438,10 +398,9 @@ static void run_remote_task (TaskLocalData *tld)
             push_to_next_queue (output, successor_queues);
         }
     }
-    // HACK should be 0 but we have a race then
     g_debug ("start to collect outstanding buffers");
     while (in_flight > 0) {
-        if (G_UNLIKELY (!got_requisition || FALSE)) {
+        if (G_UNLIKELY (!got_requisition)) {
             g_mutex_lock (mutex);
             ufo_remote_node_get_requisition (remote, &requisition);
             g_mutex_unlock (mutex);
@@ -458,18 +417,13 @@ static void run_remote_task (TaskLocalData *tld)
     }
     g_assert (num_received == num_expected);
 
-    remote_barrier ();
-    g_mutex_lock (mutex);
-    if (log_written == FALSE) {
-        log_written = TRUE;
+    //wait until all remotes completed before we write out a log
+    gint index = remote_barrier ();
+
+    if (index == 0) {
         gdouble took = g_timer_elapsed (global_clock, NULL) - start_of_operation;
-        g_message ("==== REMOTE NODE TIME TO COMPLETION: %.4f", took);
-        // write this to trace-runtime
-        FILE *fp = fopen ("trace-runtime", "w");
-        fprintf (fp, "%.6f\n", took);
-        fclose (fp);
+        g_message ("==== REMOTE NODES TIME TO COMPLETION: %.4f", took);
     }
-    g_mutex_unlock (mutex);
 
     send_poisonpill_to_nodes (successor_queues);
     g_debug ("\tTASK EXITING: %s", ufo_task_node_get_unique_name (UFO_TASK_NODE (tld->task)));
@@ -1138,7 +1092,6 @@ ufo_scheduler_run (UfoScheduler *scheduler,
         replicate_task_graph (task_graph, arch_graph);
     }
 
-    //TMERGE TODO cleanup
     gboolean disable_gpu;
     gboolean use_network_writer;
     g_object_get (G_OBJECT (priv->config), "disable-gpu", &disable_gpu, NULL);
@@ -1153,6 +1106,7 @@ ufo_scheduler_run (UfoScheduler *scheduler,
     // remove any GPU pathes in the task graph
     if (disable_gpu == TRUE) {
         gint num_remotes = g_list_length (ufo_graph_get_nodes_filtered (UFO_GRAPH(task_graph), is_remote_node, NULL));
+        // only remove if we have remotes (else we don't have anything left in the graph)
         if (num_remotes > 0) {
             GList *gpu_tasks = ufo_graph_get_nodes_filtered (UFO_GRAPH (task_graph), is_gpu_node, NULL);
             for (GList *it = g_list_first (gpu_tasks); it != NULL; it = g_list_next (it))
@@ -1169,21 +1123,12 @@ ufo_scheduler_run (UfoScheduler *scheduler,
     if (tlds == NULL)
         return;
 
-    // TMERGE TODO clean this up
-    GList *remote_nodes = ufo_graph_get_nodes_filtered (UFO_GRAPH(task_graph), is_remote_node, NULL);
-    remote_pending = g_malloc (sizeof (gint));
-    g_atomic_int_set (remote_pending, 0);
-    n_remotes = 0;
-    if (remote_nodes == NULL)
-        has_remote_nodes = FALSE;
-    else {
-        has_remote_nodes = TRUE;
-        n_remotes = g_list_length (remote_nodes);
-    }
+    remote_pending = g_malloc (sizeof(gint));
+    GList *remotes = ufo_graph_get_nodes_filtered (UFO_GRAPH(task_graph), is_remote_node, NULL);
+    n_remotes = g_list_length (remotes);
+    gboolean has_remote_nodes = n_remotes > 0;
 
-    // if (remote_nodes != NULL)
-        // groups = setup_groups2 (priv, task_graph);
-    // else
+    // group system is only used when operating locally
     if (!has_remote_nodes)
         groups = setup_groups (priv, task_graph);
 
@@ -1200,7 +1145,6 @@ ufo_scheduler_run (UfoScheduler *scheduler,
     for (guint i = 0; i < n_nodes; i++) {
         if (has_remote_nodes)
             threads[i] = g_thread_create ((GThreadFunc) run_task_without_grouping, tlds[i], TRUE, error);
-
         else
             threads[i] = g_thread_create ((GThreadFunc) run_task, tlds[i], TRUE, error);
 

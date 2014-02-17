@@ -457,7 +457,6 @@ run_scheduler (UfoDaemon *daemon)
     return NULL;
 }
 
-static gint num_results=0;
 static gboolean
 handle_incoming (UfoDaemon *daemon, UfoMessage *msg)
 {
@@ -480,21 +479,15 @@ handle_incoming (UfoDaemon *daemon, UfoMessage *msg)
             break;
         case UFO_MESSAGE_SEND_INPUTS_REQUISITION:
             handle_send_inputs (daemon, msg);
-            //printf (".");
             break;
         case UFO_MESSAGE_GET_REQUISITION:
             handle_get_requisition (daemon);
-            //printf ("~");
             break;
         case UFO_MESSAGE_GET_RESULT:
-            num_results++;
             handle_get_result (daemon);
-            //printf ("=");
             break;
         case UFO_MESSAGE_CLEANUP:
             handle_cleanup (daemon);
-	    g_debug ("num_results: %d", num_results);
-            num_results=0;         
             break;
         case UFO_MESSAGE_TERMINATE:
             handle_terminate (daemon);
@@ -503,7 +496,6 @@ handle_incoming (UfoDaemon *daemon, UfoMessage *msg)
         default:
             g_message ("Unknown message received\n");
     }
-    // g_debug ("DONE handling %s", ufo_message_type_to_char (msg->type));
     return TRUE;
 }
 

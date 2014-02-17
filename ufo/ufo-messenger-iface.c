@@ -176,7 +176,6 @@ get_sorted_events (NetworkProfiler *profiler)
 
 static void write_events_csv (UfoMessenger *msger)
 {
-// TODO TMERGE profiling
 #ifndef DEBUG
     gboolean already_written = FALSE;
 #else

@@ -1065,6 +1065,5 @@ ufo_resources_init (UfoResources *self)
     priv->include_paths = g_list_append (NULL, g_strdup ("."));
 
     priv->kernel_paths = g_list_append (NULL, g_strdup ("."));
-    // TMERGER TODO this does not compile?
     //priv->kernel_paths = g_list_append (NULL, g_strdup (UFO_KERNEL_DIR));
 }
