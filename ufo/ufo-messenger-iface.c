@@ -22,6 +22,7 @@
  #include <stdio.h>
 
 typedef UfoMessengerIface UfoMessengerInterface;
+static GTimer *global_clock;
 
 void
 ufo_message_free (UfoMessage *msg)
@@ -35,6 +36,9 @@ ufo_message_free (UfoMessage *msg)
 UfoMessage *
 ufo_message_new (UfoMessageType type, guint64 data_size)
 {
+    if (global_clock == NULL)
+        global_clock = g_timer_new ();
+   
     UfoMessage *msg = g_malloc (sizeof (UfoMessage));
     msg->type = type;
     msg->data_size = data_size;
@@ -56,8 +60,10 @@ gchar * ufo_message_type_to_char (UfoMessageType type)
             return g_strdup ("UFO_MESSAGE_REPLICATE_JSON");
         case UFO_MESSAGE_GET_STRUCTURE:
             return g_strdup ("UFO_MESSAGE_GET_STRUCTURE");
-        case UFO_MESSAGE_SEND_INPUTS:
-            return g_strdup ("UFO_MESSAGE_SEND_INPUTS");
+        case UFO_MESSAGE_SEND_INPUTS_REQUISITION:
+            return g_strdup ("UFO_MESSAGE_SEND_INPUTS_REQUISITION");
+        case UFO_MESSAGE_SEND_INPUTS_DATA:
+            return g_strdup ("UFO_MESSAGE_SEND_INPUTS_DATA");
         case UFO_MESSAGE_GET_REQUISITION:
             return g_strdup ("UFO_MESSAGE_GET_REQUISITION");
         case UFO_MESSAGE_GET_RESULT:
@@ -170,6 +176,22 @@ get_sorted_events (NetworkProfiler *profiler)
 
 static void write_events_csv (UfoMessenger *msger)
 {
+// TODO TMERGE profiling
+#ifndef DEBUG
+    gboolean already_written = FALSE;
+#else
+    gboolean already_written = TRUE;
+#endif
+
+    GMutex *mutex = g_static_mutex_get_mutex (&static_mutex);
+    g_mutex_lock (mutex);
+
+    if (already_written) {
+        g_mutex_unlock (mutex);
+        return;
+    }
+    already_written = TRUE;
+
     if (msger == NULL) return;
     NetworkProfiler *p = (NetworkProfiler*) ufo_messenger_get_profiler (msger);
     if (p == NULL) return;
@@ -207,6 +229,7 @@ static void write_events_csv (UfoMessenger *msger)
     fclose (fp);
     g_free (filename_base);
     g_free (filename);
+    g_mutex_unlock (mutex);
 }
 
 G_DEFINE_INTERFACE (UfoMessenger, ufo_messenger, G_TYPE_OBJECT)
@@ -239,28 +262,21 @@ ufo_messenger_connect (UfoMessenger *msger,
      * we use a static lock for connect/disconnect which should not affect performance
      * and only profile the first messenger that is created
     */
-    GMutex *mutex = g_static_mutex_get_mutex (&static_mutex);
-    g_mutex_lock (mutex);
-
     if (global_clock == NULL)
         global_clock = g_timer_new ();
     init_profiler (msger, addr, role);
     UFO_MESSENGER_GET_IFACE (msger)->connect (msger, addr, role);
-
-    g_mutex_unlock (mutex);
 }
 
 void
 ufo_messenger_disconnect (UfoMessenger *msger)
 {
-    GMutex *mutex = g_static_mutex_get_mutex (&static_mutex);
-    g_mutex_lock (mutex);
 
+    // TMERGE TODO conditioanl tracing
     write_events_csv (msger);
 
     UFO_MESSENGER_GET_IFACE (msger)->disconnect (msger);
 
-    g_mutex_unlock (mutex);
 }
 
 /**
@@ -278,16 +294,7 @@ ufo_messenger_send_blocking (UfoMessenger *msger,
                              UfoMessage *request,
                              GError **error)
 {
-    GMutex *mutex = g_static_mutex_get_mutex (&static_mutex);
-    NetworkEvent *ev = start_trace_event (msger, NULL, "SEND_LOCKACQUIRE");
-    g_mutex_lock (mutex);
-    stop_trace_event (msger, NULL, ev);
-
-    ev = start_trace_event (msger, request, NULL);
     UfoMessage *msg = UFO_MESSENGER_GET_IFACE (msger)->send_blocking (msger, request, error);
-    stop_trace_event (msger, msg, ev);
-
-    g_mutex_unlock (mutex);
     return msg;
 }
 
@@ -306,15 +313,7 @@ UfoMessage *
 ufo_messenger_recv_blocking (UfoMessenger *msger,
                             GError **error)
 {
-    GMutex *mutex = g_static_mutex_get_mutex (&static_mutex);
-    NetworkEvent *ev = start_trace_event (msger, NULL, "RECV_LOCKACQUIRE");
-    g_mutex_lock (mutex);
-    stop_trace_event (msger, NULL, ev);
-
-    ev = start_trace_event (msger, NULL, NULL);
     UfoMessage *msg = UFO_MESSENGER_GET_IFACE (msger)->recv_blocking (msger, error);
-    stop_trace_event (msger, msg, ev);
-    g_mutex_unlock (mutex);
     return msg;
 }
 
@@ -327,7 +326,6 @@ void
 ufo_messenger_set_profiler (UfoMessenger *msger, gpointer data)
 {
     UFO_MESSENGER_GET_IFACE (msger)->set_profiler (msger, data);
-
 }
 static void
 ufo_messenger_default_init (UfoMessengerInterface *iface)

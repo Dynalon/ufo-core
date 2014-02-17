@@ -32,7 +32,6 @@ G_DEFINE_TYPE_WITH_CODE (UfoZmqMessenger, ufo_zmq_messenger, G_TYPE_OBJECT,
                          G_IMPLEMENT_INTERFACE (UFO_TYPE_MESSENGER,
                                                 ufo_messenger_interface_init))
 
-
 struct _UfoZmqMessengerPrivate {
     gchar *remote_addr;
     GMutex *mutex;
@@ -69,6 +68,9 @@ ufo_zmq_messenger_new (void)
 static void
 validate_zmq_listen_address (gchar *addr)
 {
+    if (g_str_has_prefix (addr, "ipc://"))
+        return;
+
     if (!g_str_has_prefix (addr, "tcp://"))
         g_critical ("address didn't start with tcp:// scheme, which is required currently");
 
@@ -86,7 +88,6 @@ void
 ufo_zmq_messenger_connect (UfoMessenger *msger, gchar *addr, UfoMessengerRole role)
 {
     UfoZmqMessengerPrivate *priv = UFO_ZMQ_MESSENGER_GET_PRIVATE (msger);
-    g_mutex_lock (priv->mutex);
 
     priv->remote_addr = g_strdup (addr);
     priv->role = role;
@@ -113,7 +114,6 @@ ufo_zmq_messenger_connect (UfoMessenger *msger, gchar *addr, UfoMessengerRole ro
             g_critical ("could not bind to address %s", priv->remote_addr);
     }
 
-    g_mutex_unlock (priv->mutex);
     return;
 }
 
@@ -121,8 +121,6 @@ void
 ufo_zmq_messenger_disconnect (UfoMessenger *msger)
 {
     UfoZmqMessengerPrivate *priv = UFO_ZMQ_MESSENGER_GET_PRIVATE (msger);
-
-    g_mutex_lock (priv->mutex);
 
     if (priv->zmq_socket != NULL) {
         zmq_close (priv->zmq_socket);
@@ -133,7 +131,6 @@ ufo_zmq_messenger_disconnect (UfoMessenger *msger)
         g_free (priv->remote_addr);
     }
 
-    g_mutex_unlock (priv->mutex);
     return;
 }
 
@@ -146,8 +143,6 @@ ufo_zmq_messenger_send_blocking (UfoMessenger *msger,
 
     if (request_msg->type == UFO_MESSAGE_ACK && priv->role == UFO_MESSENGER_CLIENT)
         g_critical ("Clients can't send ACK messages");
-
-    g_mutex_lock (priv->mutex);
 
     UfoMessage *result = NULL;
     zmq_msg_t request;
@@ -219,7 +214,6 @@ ufo_zmq_messenger_send_blocking (UfoMessenger *msger,
     goto finalize;
 
     finalize:
-        g_mutex_unlock (priv->mutex);
         return result;
 
 }
@@ -230,8 +224,6 @@ ufo_zmq_messenger_recv_blocking (UfoMessenger *msger,
 {
     UfoZmqMessengerPrivate *priv = UFO_ZMQ_MESSENGER_GET_PRIVATE (msger);
     g_assert (priv->role == UFO_MESSENGER_SERVER);
-
-    g_mutex_lock (priv->mutex);
 
     UfoMessage *result = NULL;
     zmq_msg_t reply;
@@ -268,7 +260,6 @@ ufo_zmq_messenger_recv_blocking (UfoMessenger *msger,
     goto finalize;
 
     finalize:
-        g_mutex_unlock (priv->mutex);
         return result;
 }
 
@@ -314,7 +305,6 @@ ufo_zmq_messenger_finalize (GObject *object)
         priv->zmq_ctx = NULL;
     }
 
-    g_mutex_free (priv->mutex);
 }
 
 static void
@@ -333,5 +323,4 @@ ufo_zmq_messenger_init (UfoZmqMessenger *msger)
     UfoZmqMessengerPrivate *priv = UFO_ZMQ_MESSENGER_GET_PRIVATE (msger);
     priv->zmq_socket = NULL;
     priv->zmq_ctx = NULL;
-    priv->mutex = g_mutex_new ();
 }

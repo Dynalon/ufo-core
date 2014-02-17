@@ -4,6 +4,7 @@ cmake_minimum_required(VERSION 2.6)
 set(ufocore_SRCS
     ufo-arch-graph.c
     ufo-buffer.c
+    ufo-buffer-pool.c
     ufo-configurable.c
     ufo-config.c
     ufo-cpu-node.c
@@ -35,6 +36,7 @@ set(ufocore_SRCS
 set(ufocore_HDRS
     ufo-arch-graph.h
     ufo-buffer.h
+    ufo-buffer-pool.h
     ufo-configurable.h
     ufo-config.h
     ufo-cpu-node.h
@@ -190,7 +192,7 @@ endif()
 #{{{ gtk-doc
 pkg_check_modules(GTK_DOC gtk-doc)
 
-if(GTK_DOC_FOUND)
+if(0)
     option(WITH_GTK_DOC "Build API reference" ON)
     if (WITH_GTK_DOC)
         set(docs_dir "${CMAKE_CURRENT_BINARY_DIR}/../docs")
