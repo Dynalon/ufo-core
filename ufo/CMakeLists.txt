@@ -4,6 +4,7 @@ cmake_minimum_required(VERSION 2.6)
 set(ufocore_SRCS
     ufo-arch-graph.c
     ufo-buffer.c
+    ufo-buffer-pool.c
     ufo-configurable.c
     ufo-config.c
     ufo-cpu-node.c
@@ -35,6 +36,7 @@ set(ufocore_SRCS
 set(ufocore_HDRS
     ufo-arch-graph.h
     ufo-buffer.h
+    ufo-buffer-pool.h
     ufo-configurable.h
     ufo-config.h
     ufo-cpu-node.h
@@ -63,12 +65,6 @@ set(ufocore_HDRS
     )
 #}}}
 #{{{ optional dependencies
-pkg_check_modules(PYTHON python)
-
-if(PYTHON_FOUND)
-    set(HAVE_PYTHON "1")
-endif()
-
 if(WITH_MPI)
     set(ufocore_HDRS ${ufocore_HDRS}
         ufo-mpi-messenger.h
@@ -79,9 +75,6 @@ if(WITH_MPI)
 endif ()
 #}}}
 #{{{ libufo
-configure_file(${CMAKE_CURRENT_SOURCE_DIR}/config.h.in
-               ${CMAKE_CURRENT_BINARY_DIR}/config.h)
-
 add_definitions(-DUFO_COMPILATION)
 
 if(CMAKE_BUILD_TYPE MATCHES "Release")
@@ -100,7 +93,7 @@ endif()
 
 set_target_properties(ufo PROPERTIES
     VERSION ${PACKAGE_VERSION}
-    SOVERSION ${UFO_SO_VERSION})
+    SOVERSION ${UFO_VERSION_MAJOR})
 
 target_link_libraries(ufo ${UFOCORE_DEPS})
 
@@ -115,7 +108,7 @@ install(FILES ${ufocore_HDRS}
         DESTINATION ${UFO_INCLUDEDIR}/ufo)
 
 install(FILES ufo-basic-ops.cl
-        DESTINATION ${UFO_LIBDIR}/ufo)
+        DESTINATION ${UFO_KERNELDIR})
 #}}}
 #}}}
 #{{{ glib-mkenums
@@ -199,7 +192,7 @@ endif()
 #{{{ gtk-doc
 pkg_check_modules(GTK_DOC gtk-doc)
 
-if(GTK_DOC_FOUND)
+if(0)
     option(WITH_GTK_DOC "Build API reference" ON)
     if (WITH_GTK_DOC)
         set(docs_dir "${CMAKE_CURRENT_BINARY_DIR}/../docs")

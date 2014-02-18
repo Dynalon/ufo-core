@@ -10,10 +10,7 @@ set(UFO_DESCRIPTION_SUMMARY "UFO high-speed image processing core library")
 set(UFO_VERSION_MAJOR "0")
 set(UFO_VERSION_MINOR "6")
 set(UFO_VERSION_PATCH "0")
-set(UFO_GIR_VERSION "${UFO_VERSION_MAJOR}.${UFO_VERSION_MINOR}")
-
-# increase UFO_SO_VERSION on each version that breaks ABI compatibility
-set(UFO_SO_VERSION "4")
+set(UFO_GIR_VERSION "${UFO_VERSION_MAJOR}.0")
 #}}}
 #{{{ Package version
 set(PACKAGE_VERSION_MAJOR ${UFO_VERSION_MAJOR})
@@ -33,6 +30,9 @@ set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/common/cmake")
 # Add configure-like prefixes and directories
 include(ConfigurePaths)
 configure_paths(UFO)
+
+set(UFO_INCLUDEDIR "${UFO_INCLUDEDIR}/ufo-${UFO_VERSION_MAJOR}")
+set(UFO_KERNELDIR "${UFO_DATADIR}/ufo")
 #}}}
 #{{{ Options
 find_program (MPICC "mpicc")
@@ -57,13 +57,15 @@ if (WITH_MPI)
     
     if (NOT MPICC)
         message (FATAL_ERROR "No mpicc compiler be found but MPI was explicitly enabled")
+    else ()
+        message ("Using mpicc found at ${MPICC}")
     endif ()
 
     set(CMAKE_C_COMPILER ${MPICC})
 endif ()
 #}}}
 #{{{ Dependencies
-set(PKG_GLIB2_MIN_REQUIRED "2.22")
+set(PKG_GLIB2_MIN_REQUIRED "2.30")
 set(PKG_JSON_GLIB_MIN_REQUIRED "0.7.6")
 set(PKG_ZMQ_MIN_REQUIRED "2.1")
 
@@ -77,6 +79,7 @@ pkg_check_modules(GTHREAD2 gthread-2.0>=${PKG_GLIB2_MIN_REQUIRED} REQUIRED)
 pkg_check_modules(GIO2 gio-2.0>=${PKG_GLIB2_MIN_REQUIRED} REQUIRED)
 pkg_check_modules(JSON_GLIB json-glib-1.0>=${PKG_JSON_GLIB_MIN_REQUIRED} REQUIRED)
 pkg_check_modules(ZMQ libzmq>=${PKG_ZMQ_MIN_REQUIRED} REQUIRED)
+pkg_check_modules(PYTHON python)
 
 set(UFOCORE_DEPS
     ${OPENCL_LIBRARIES}
@@ -88,12 +91,14 @@ set(UFOCORE_DEPS
     ${JSON_GLIB_LIBRARIES}
     ${ZMQ_LIBRARIES})
 
+if(PYTHON_FOUND)
+    set(HAVE_PYTHON "1")
+endif()
+
 #{{{ Add include directories
 include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}
-    ${CMAKE_CURRENT_SOURCE_DIR}/ufo
     ${CMAKE_CURRENT_BINARY_DIR}
-    ${CMAKE_CURRENT_BINARY_DIR}/ufo
     ${GLIB2_INCLUDE_DIRS}
     ${GIO2_INCLUDE_DIRS}
     ${OPENCL_INCLUDE_DIRS}
@@ -102,7 +107,7 @@ include_directories(
 #}}}
 #}}}
 #{{{ Definitions
-add_definitions("-std=c99 -pedantic -Wall -Wextra -Werror -fPIC")
+add_definitions("-std=c99 -pedantic -Wall -Wextra -fPIC")
 
 if (CMAKE_COMPILER_IS_GNUCC OR ("${CMAKE_C_COMPILER_ID}" STREQUAL "Clang"))
     add_definitions("-Wcast-align
@@ -112,6 +117,7 @@ if (CMAKE_COMPILER_IS_GNUCC OR ("${CMAKE_C_COMPILER_ID}" STREQUAL "Clang"))
                      -Wmissing-prototypes
                      -Wnested-externs
                      -Wno-deprecated-declarations
+                     -Wno-unused
                      -Wno-long-long
                      -Wno-missing-field-initializers
                      -Wno-unused-parameter
@@ -123,6 +129,9 @@ if (CMAKE_COMPILER_IS_GNUCC OR ("${CMAKE_C_COMPILER_ID}" STREQUAL "Clang"))
 endif()
 
 add_definitions(-DG_LOG_DOMAIN=\"Ufo\")
+
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/config.h.in
+               ${CMAKE_CURRENT_BINARY_DIR}/config.h)
 #}}}
 #{{{ Subdirectories
 add_subdirectory(ufo)

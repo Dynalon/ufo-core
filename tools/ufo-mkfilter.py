@@ -5,6 +5,7 @@ This file generates GObject file templates that a filter author can use, to
 implement their own nodes.
 """
 
+import os
 import sys
 import re
 import string
@@ -73,7 +74,13 @@ if __name__ == '__main__':
         print err
         sys.exit(1)
 
-    env = jinja2.Environment(loader=jinja2.PackageLoader('mkfilter', 'templates'))
+    template_dir = '@UFO_FILTER_TEMPLATE_DIR@'
+
+    if not os.path.exists(template_dir):
+        template_dir = 'templates'
+
+    loader = jinja2.FileSystemLoader(template_dir)
+    env = jinja2.Environment(loader=loader)
 
     generate_file(args, env, 'h')
     generate_file(args, env, 'c')
@@ -82,6 +89,6 @@ if __name__ == '__main__':
 the generated files into core/filters and adapt the CMakeLists.txt file. You \
 should only add the filter sources to ${ufo_SRCS} if all build dependencies are \
 met for your particular plugin.  Good luck!"
-    
+
     print ""
     print textwrap.fill(message)
